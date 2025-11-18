@@ -4,6 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+
 warnings.filterwarnings("ignore")
 
 df = pd.read_csv("data/bd_dm_cmp_entry.csv", sep=";")
@@ -11,23 +15,21 @@ list_cols = ["midx","midy","midz", "starkey_min"]
 df = df[list_cols].copy()
 
 x_coords = df['midx'].values
+y_coords = df['midy'].values
 z_coords = df['midz'].values
 attr = df['starkey_min'].values
 
 # Aplicar cluster k means espacial
-
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-
 scaler = StandardScaler()
-coords_scaled = scaler.fit_transform(df[['midx', 'midz']])
+coords_scaled = scaler.fit_transform(df[['midx', 'midy', 'midz']])
 attr_scaled = scaler.fit_transform(df[['starkey_min']])
-# %%
-w = 0.7
-k = 5
-coords_weight = w * coords_scaled
-attr_weight = (1 - w) * attr_scaled
 
+# %%
+w = 0.5
+k = 6
+coords_weight = w * coords_scaled[:, :3]
+attr_weight = (1 - w) * attr_scaled[:, 0].reshape(-1, 1)
+#%%
 # Combinar
 features = np.hstack([coords_weight, attr_weight])
 kmeans = KMeans(n_clusters=k)
@@ -35,14 +37,28 @@ clusters = kmeans.fit_predict(features)
 df['cluster'] = clusters
 #%%
 
-sns.scatterplot(x='midx', y='midz', hue='cluster', data=df, palette='viridis')
-plt.grid(True, alpha=0.3)
-plt.title('Clusters K-Means Espacial')
-plt.xlabel('X')
-plt.ylabel('Z')
-plt.legend(title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.tight_layout()
-plt.show()
+import plotly.express as px
+
+fig = px.scatter_3d(
+    df,
+    x='midx', y='midy', z='midz',
+    color='cluster',    
+    color_continuous_scale='inferno',
+    title='Clusters K-Means Espacial 3D',
+    # labels={'midx': 'X (midx)', 'midy': 'Y (midy)', 'midz': 'Z (midz)', 'cluster': 'Cluster'},
+    opacity=0.7
+)
+
+fig.update_traces(marker=dict(size=3))
+fig.update_layout(
+    legend_title_text='Cluster',
+    scene=dict(
+        xaxis_title="X (midx)",
+        yaxis_title="Y (midy)",
+        zaxis_title="Z (midz)"
+    )
+)
+fig.show()
 # %%
 def kmeans_ponderado(x, z, atributo, n_clusters, peso_espacial=0.5):
     """
@@ -77,7 +93,7 @@ def kmeans_ponderado(x, z, atributo, n_clusters, peso_espacial=0.5):
     return clusters, features_ponderadas
 
 pesos = [0.0, 0.3, 0.5, 0.7, 1.0]
-n_clusters = 10
+n_clusters = 6
 
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
 axes = axes.flatten()
@@ -122,42 +138,3 @@ plt.colorbar(axes[5].scatter(x_coords, z_coords, c=attr, cmap='RdYlBu_r'),
 
 plt.tight_layout()
 plt.show()
-#%%
-# ============================ Estadisticas por cluster ============================
-
-# Calcular y graficar media vs desviación estándar de starkey_min por cluster
-
-df["cluster"] = clusters_w
-medias = []
-stds = []
-clusters = []
-
-for i in range(df["cluster"].nunique()):
-    grupo = df[df["cluster"] == i]["starkey_min"]
-    media = grupo.mean()
-    std = grupo.std()
-    ep = std / media
-    medias.append(media)
-    stds.append(std)
-    clusters.append(i)
-    print(f"Cluster {i} - media: {media:.2f} - std: {std:.2f} - ep: {ep:.2f}")
-
-plt.figure(figsize=(8,5))
-plt.scatter(medias, stds, color='blue', alpha=0.7)
-for i, (x, y) in enumerate(zip(medias, stds)):
-    plt.text(x, y, str(i), fontsize=10, ha='right', va='bottom', color='dimgray')
-plt.xlabel('Media de starkey_min')
-plt.ylabel('Desviación estándar de starkey_min')
-plt.title('Media vs Desviación Estándar por Cluster')
-plt.grid(alpha=0.3)
-
-# Ajuste de línea de tendencia
-z = np.polyfit(medias, stds, 1)
-p = np.poly1d(z)
-medias_line = np.linspace(min(medias), max(medias), 100)
-plt.plot(medias_line, p(medias_line), 'r--', label='Tendencia')
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-#%%
