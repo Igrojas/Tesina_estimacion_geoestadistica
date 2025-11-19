@@ -76,8 +76,8 @@ def kmeans_ponderado(x, z, atributo, n_clusters, peso_espacial=0.5):
     
     return clusters, features_ponderadas
 
-pesos = [0.0, 0.3, 0.5, 0.7, 1.0]
-n_clusters = 10
+pesos = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+n_clusters = 4
 
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
 axes = axes.flatten()
@@ -159,5 +159,68 @@ plt.plot(medias_line, p(medias_line), 'r--', label='Tendencia')
 plt.legend()
 plt.tight_layout()
 plt.show()
-
 #%%
+from scipy.stats import lognorm
+from matplotlib.cm import get_cmap
+
+# Graficar Probability Lognormal Plot para todos los clusters
+
+n_clusters = df["cluster"].nunique()
+cmap = get_cmap("tab10")
+
+plt.figure(figsize=(10, 6))
+
+for i in range(n_clusters):
+    data = df[df["cluster"] == i]["starkey_min"].dropna().values
+    if len(data) < 3:
+        continue
+    # Ajustar distribución log-normal
+    shape, loc, scale = lognorm.fit(data, floc=0)
+    sorted_data = np.sort(data)
+    # Probabilidad de no excedencia
+    prob = (np.arange(1, len(sorted_data) + 1) - 0.5) / len(sorted_data)
+    # Valor teórico lognormal para las probabilidades
+    theo = lognorm.ppf(prob, shape, loc=loc, scale=scale)
+    color = cmap(i % 10)
+    # Probability plot: eje X = datos reales ordenados, eje Y = probabilidad acumulada (escala log-normal teórica)
+    plt.plot(sorted_data, prob, marker='o', linestyle='', color=color, label=f'Cluster {i} datos')
+    plt.plot(theo, prob, linestyle='-', color=color, alpha=0.7, label=f'Cluster {i} lognorm')
+
+plt.xlabel('starkey_min')
+plt.ylabel('Probabilidad no excedencia')
+plt.title(f'Probability Lognormal Plot por Cluster - starkey_min - {n_clusters} clusters')
+plt.legend(title="Clusters", fontsize=10, title_fontsize=11)
+plt.yscale('logit')
+plt.grid(alpha=0.25, which='both')
+plt.tight_layout()
+plt.show()
+# %%
+import seaborn as sns
+
+# Paleta profesional: "Set2" es sobria, alternativa: "colorblind", "pastel", o crear una custom.
+professional_palette = sns.color_palette("colorblind", n_colors=n_clusters)
+
+plt.figure(figsize=(10, 6))
+ax = sns.boxplot(
+    x="cluster", 
+    y="starkey_min", 
+    data=df, 
+    palette=professional_palette,
+    boxprops=dict(alpha=1)
+)
+
+# Calcular y graficar la media de cada cluster
+cluster_means = df.groupby("cluster")["starkey_min"].mean().sort_index()
+for i, mean in enumerate(cluster_means):
+    ax.scatter(i, mean, color='firebrick', s=40, marker='D', label="Media" if i == 0 else "", zorder=10, edgecolor='black')
+
+plt.xlabel('Cluster')
+plt.ylabel('starkey_min')
+plt.title(f'Boxplots de starkey_min por Cluster - {n_clusters} clusters')
+plt.grid(axis='y', alpha=0.3)
+handles, labels = ax.get_legend_handles_labels()
+# Solo un entry para la media
+if "Media" in labels:
+    ax.legend(["Media"], loc="best", fontsize=10, facecolor="white", frameon=True)
+plt.tight_layout()
+plt.show()
