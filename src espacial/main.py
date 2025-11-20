@@ -241,11 +241,14 @@ resumen_graficas_clusters(df, clusters_w)
 # %%
 
 N_points = 100
+
 x_range = np.linspace(x_coords.min(), x_coords.max(), N_points)
 z_range = np.linspace(z_coords.min(), z_coords.max(), N_points)
+
 xx, zz = np.meshgrid(x_range, z_range)
 
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
 
 n_neighbors_list = [5, 10, 15, 20]
 
@@ -253,17 +256,25 @@ X_train = np.column_stack((x_coords, z_coords))
 y_train = clusters_w
 X_ghost = np.column_stack((xx.flatten(), zz.flatten()))
 
+# Estandarizar X_train y X_ghost con el mismo scaler
+scaler_knn = StandardScaler()
+X_train_scaled = scaler_knn.fit_transform(X_train)
+X_ghost_scaled = scaler_knn.transform(X_ghost)
+
 fig, axes = plt.subplots(2, 2, figsize=(16, 14), sharex=True, sharey=True, dpi=150)
 axes = axes.flatten()
 for idx, n_neighbors in enumerate(n_neighbors_list):
     knn = KNeighborsClassifier(n_neighbors=n_neighbors)
-    knn.fit(X_train, y_train)
-    ghost_clusters_knn = knn.predict(X_ghost)
+    # Entrenar y predecir usando datos estandarizados
+    knn.fit(X_train_scaled, y_train)
+    ghost_clusters_knn = knn.predict(X_ghost_scaled)
     sc = axes[idx].scatter(xx, zz, c=ghost_clusters_knn, cmap='viridis', s=10, alpha=0.6)
     axes[idx].set_title(f'n_neighbors = {n_neighbors}', fontweight='bold')
     axes[idx].set_xlabel('midx (X)')
     if idx in [0, 2]:
         axes[idx].set_ylabel('midz (Z)')
+    # También estandarizar x_coords y z_coords para visualizar sobre el mismo espacio,
+    # pero para graficar puntos originales los usamos en su sistema original (sin escalar)
     axes[idx].scatter(x_coords, z_coords, c=clusters_w, cmap='viridis',
                         s=50, alpha=1, edgecolors='k', linewidth=0.5)
         
