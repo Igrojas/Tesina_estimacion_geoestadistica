@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
+venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -20,15 +23,17 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
-venv/
-env/
-ENV/
-.venv
-
 # Jupyter Notebook
 .ipynb_checkpoints
-*.ipynb_checkpoints
+
+# Data
+data/processed/*
+!data/processed/.gitkeep
+
+# Results
+results/figures/*
+results/tables/*
+results/models/*
 
 # IDE
 .vscode/
@@ -40,15 +45,3 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Archivos compilados
-*.out
-a.out
-
-# Datos sensibles (opcional - descomentar si no quieres subir datos)
-# data/
-
-# Resultados temporales (comentado para mantener los PNG de resultados)
-# *.png
-
