@@ -6,10 +6,11 @@ from sklearn.cluster import KMeans
 import numpy as np
 
 class ClusterKmeans:
-    def __init__(self, n_clusters=4):
+    def __init__(self, n_clusters=4, w_spatial=0.0):
 
         # Parametros
         self.n_clusters = n_clusters
+        self.w_spatial = w_spatial
 
         # Objetos Internos
         self.scaler_coords = StandardScaler()
@@ -36,7 +37,10 @@ class ClusterKmeans:
 
         attr_scaled = self.scaler_attr.fit_transform(attr.reshape(-1, 1))
 
-        features = np.column_stack([coords_scaled, attr_scaled])
+        coords_weighted = coords_scaled * self.w_spatial
+        attr_weighted = attr_scaled * (1 - self.w_spatial)
+
+        features = np.column_stack([coords_weighted, attr_weighted])
 
         self.kmeans = KMeans(
                             n_clusters=self.n_clusters, 
@@ -92,5 +96,30 @@ class ClusterKmeans:
             print(f"  • Std: {stat['std']:.2f}")
             print(f"  • Efecto Proporcional: {stat['efecto_proporcional']:.2f}")
 
+    def get_global_metrics(self):
+
+        if not self.ajustado:
+            raise ValueError("El modelo no ha sido ajustado. Por favor, ajuste el modelo antes de obtener las métricas globales.")
+        
+        stats = self.get_stats()
+
+        stds = [s['std'] for s in stats.values()]
+        cvs = [s['efecto_proporcional'] for s in stats.values()]
+        n_points = [s['n_points'] for s in stats.values()]
+
+        std_prom = np.mean(stds)
+        cv_prom = np.mean(cvs)
+        n_points_prom = np.mean(n_points)
+
+        return {
+            'std_prom': float(std_prom),
+            'std_min': float(min(stds)),
+            'std_max': float(max(stds)),
+            'cv_prom': float(cv_prom),
+            'cv_min': float(min(cvs)),
+            'cv_max': float(max(cvs)),
+            'n_points_min': float(min(n_points)),
+            'n_points_max': float(max(n_points)),
+        }
 
 
