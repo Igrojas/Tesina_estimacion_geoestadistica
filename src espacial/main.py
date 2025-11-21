@@ -6,7 +6,7 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings("ignore")
 
-df = pd.read_csv("data/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv("data/raw/bd_dm_cmp_entry.csv", sep=";")
 list_cols = ["midx","midy","midz", "starkey_min"]
 df = df[list_cols].copy()
 
