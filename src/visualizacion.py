@@ -591,3 +591,13 @@ class VisualizadorClusters:
             plt.close()
 
         return fig
+
+
+    def plot_interpolacion(self, interpolador, mostrar_puntos=True,
+                            guardar=True, nombre_archivo=None, mostrar=True):
+
+
+        if not interpolador.interpolado:
+            raise ValueError("❌ El interpolador no está interpolado")
+
+        clusterer = interpolador.clusterer
