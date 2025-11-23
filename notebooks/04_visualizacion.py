@@ -10,11 +10,12 @@ warnings.filterwarnings('ignore')
 
 from src.clustering import ClusterKmeans
 import importlib
+
 VisualizadorClusters = importlib.reload(importlib.import_module('src.visualizacion')).VisualizadorClusters
 
 print("✅ Imports exitosos")
 
-df = pd.read_csv("data/raw/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv("../data/raw/bd_dm_cmp_entry.csv", sep=";")
 
 columnas = ["midx", "midy", "midz", "starkey_min", "bwi_kwh_tc"]
 df = df[columnas].copy()

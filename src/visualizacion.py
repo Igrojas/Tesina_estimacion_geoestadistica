@@ -601,3 +601,253 @@ class VisualizadorClusters:
             raise ValueError("❌ El interpolador no está interpolado")
 
         clusterer = interpolador.clusterer
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        contour = ax.contourf(
+            interpolador.xx,
+            interpolador.zz,
+            interpolador.clusters_interpolados,
+            levels=np.arange(clusterer.n_clusters + 1) - 0.5,
+            cmap = self.cmap_clusters,
+            alpha = 0.4,
+        )
+
+        if mostrar_puntos:
+            scatter = ax.scatter(
+                clusterer.x_original,
+                clusterer.z_original,
+                c=clusterer.clusters,
+                cmap=self.cmap_clusters,
+                s=50,
+                alpha=0.9,
+                edgecolors='k',
+                linewidth=0.8,
+                zorder=10
+            )
+
+        titulo = (f'Interpolación Espacial (KNN)\n'
+                 f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}, '
+                 f'n_neighbors={interpolador.n_neighbors}')
+        ax.set_title(titulo, fontweight='bold', fontsize=13)
+        
+        # Etiquetas
+        ax.set_xlabel('X (midx)', fontsize=12)
+        ax.set_ylabel('Z (midz)', fontsize=12)
+        ax.grid(alpha=0.3)
+        
+        # Colorbar
+        cbar = plt.colorbar(contour, ax=ax)
+        cbar.set_label('Cluster', fontsize=11)
+        
+        # Información
+        info = interpolador.get_info()
+        texto = (f"Grilla: {info['n_points']}×{info['n_points']}\n"
+                f"KNN neighbors: {info['n_neighbors']}")
+        ax.text(0.02, 0.98, texto,
+               transform=ax.transAxes,
+               verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8),
+               fontsize=9)
+        
+        plt.tight_layout()
+        
+        # Guardar
+        if guardar:
+            if nombre_archivo is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"interpolacion_k{clusterer.n_clusters}_knn{interpolador.n_neighbors}_{timestamp}.png"
+            
+            ruta = self.carpeta_salida / nombre_archivo
+            plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')
+            print(f"✅ Interpolación guardada: {ruta}")
+        
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+        
+        return fig, ax
+
+    def plot_comparacion_interpolacion(self, clusterer, interpolador,
+                                      guardar=True, nombre_archivo=None, mostrar=True):
+        """
+        Compara clusters originales vs interpolación lado a lado.
+        
+        Parámetros:
+        -----------
+        clusterer : ClusterizadorKMeans
+            Clustering original
+        interpolador : InterpoladorEspacial
+            Interpolación realizada
+        """
+        if not interpolador.interpolado:
+            raise ValueError("❌ Primero ejecuta interpolador.interpolar()")
+        
+        # Crear figura con 3 subplots
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+        
+        # === PANEL 1: Solo clusters ===
+        ax = axes[0]
+        scatter1 = ax.scatter(
+            clusterer.x_original,
+            clusterer.z_original,
+            c=clusterer.clusters,
+            cmap=self.cmap_clusters,
+            s=50,
+            alpha=0.8,
+            edgecolors='k',
+            linewidth=0.5
+        )
+        ax.set_title('Clusters Originales', fontweight='bold', fontsize=13)
+        ax.set_xlabel('X (midx)')
+        ax.set_ylabel('Z (midz)')
+        ax.grid(alpha=0.3)
+        plt.colorbar(scatter1, ax=ax, label='Cluster')
+        
+        # === PANEL 2: Interpolación ===
+        ax = axes[1]
+        contour = ax.contourf(
+            interpolador.xx,
+            interpolador.zz,
+            interpolador.clusters_interpolados,
+            levels=np.arange(clusterer.n_clusters + 1) - 0.5,
+            cmap=self.cmap_clusters,
+            alpha=0.5
+        )
+        ax.scatter(
+            clusterer.x_original,
+            clusterer.z_original,
+            c=clusterer.clusters,
+            cmap=self.cmap_clusters,
+            s=50,
+            alpha=1,
+            edgecolors='k',
+            linewidth=0.8,
+            zorder=10
+        )
+        ax.set_title(f'Interpolación (KNN n={interpolador.n_neighbors})',
+                    fontweight='bold', fontsize=13)
+        ax.set_xlabel('X (midx)')
+        ax.set_ylabel('Z (midz)')
+        ax.grid(alpha=0.3)
+        plt.colorbar(contour, ax=ax, label='Cluster')
+        
+        # === PANEL 3: Atributo real ===
+        ax = axes[2]
+        scatter3 = ax.scatter(
+            clusterer.x_original,
+            clusterer.z_original,
+            c=clusterer.attr_original,
+            cmap=self.cmap_atributo,
+            s=50,
+            alpha=0.8,
+            edgecolors='k',
+            linewidth=0.5
+        )
+        ax.set_title('Atributo Real', fontweight='bold', fontsize=13)
+        ax.set_xlabel('X (midx)')
+        ax.set_ylabel('Z (midz)')
+        ax.grid(alpha=0.3)
+        plt.colorbar(scatter3, ax=ax, label='starkey_min')
+        
+        plt.tight_layout()
+        
+        # Guardar
+        if guardar:
+            if nombre_archivo is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"comparacion_interpolacion_{timestamp}.png"
+            
+            ruta = self.carpeta_salida / nombre_archivo
+            plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')
+            print(f"✅ Comparación guardada: {ruta}")
+        
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+        
+        return fig, axes
+    
+    def plot_comparacion_n_neighbors(self, interpoladores_dict,
+                                    guardar=True, nombre_archivo=None, mostrar=True):
+        """
+        Compara diferentes valores de n_neighbors en una grilla.
+        
+        Parámetros:
+        -----------
+        interpoladores_dict : dict
+            {n_neighbors: InterpoladorEspacial}
+        """
+        n_configs = len(interpoladores_dict)
+        
+        # Determinar layout de subplots
+        if n_configs <= 4:
+            nrows, ncols = 2, 2
+        elif n_configs <= 6:
+            nrows, ncols = 2, 3
+        else:
+            nrows, ncols = 3, 3
+        
+        fig, axes = plt.subplots(nrows, ncols, figsize=(6*ncols, 5*nrows))
+        axes = axes.flatten() if n_configs > 1 else [axes]
+        
+        for idx, (n_neigh, interp) in enumerate(sorted(interpoladores_dict.items())):
+            if idx >= len(axes):
+                break
+            
+            ax = axes[idx]
+            
+            # Interpolación
+            contour = ax.contourf(
+                interp.xx,
+                interp.zz,
+                interp.clusters_interpolados,
+                levels=np.arange(interp.clusterer.n_clusters + 1) - 0.5,
+                cmap=self.cmap_clusters,
+                alpha=0.4
+            )
+            
+            # Puntos originales
+            ax.scatter(
+                interp.clusterer.x_original,
+                interp.clusterer.z_original,
+                c=interp.clusterer.clusters,
+                cmap=self.cmap_clusters,
+                s=30,
+                alpha=0.9,
+                edgecolors='k',
+                linewidth=0.5,
+                zorder=10
+            )
+            
+            ax.set_title(f'n_neighbors = {n_neigh}', fontweight='bold', fontsize=12)
+            ax.set_xlabel('X (midx)', fontsize=10)
+            ax.set_ylabel('Z (midz)', fontsize=10)
+            ax.grid(alpha=0.3)
+        
+        # Ocultar ejes sobrantes
+        for idx in range(n_configs, len(axes)):
+            axes[idx].axis('off')
+        
+        fig.suptitle('Comparación de n_neighbors en KNN',
+                    fontsize=16, fontweight='bold', y=0.995)
+        plt.tight_layout()
+        
+        # Guardar
+        if guardar:
+            if nombre_archivo is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"comparacion_knn_{timestamp}.png"
+            
+            ruta = self.carpeta_salida / nombre_archivo
+            plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')
+            print(f"✅ Comparación n_neighbors guardada: {ruta}")
+        
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+        
+        return fig, axes

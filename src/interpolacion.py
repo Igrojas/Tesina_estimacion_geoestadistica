@@ -5,8 +5,10 @@ Con KNN
 
 
 import numpy as np
-import sklearn.neighbors as KNeighborsClassifier
-import sklearn.preprocessing as StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from pathlib import Path
+from datetime import datetime
 
 class InterpoladorEspacial:
 
