@@ -7,7 +7,7 @@ Versión 1: KNN, IDW y Kriging Ordinario
 import numpy as np
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
-from pykrige.rk import OrdinaryKriging
+from pykrige.ok import OrdinaryKriging
 from scipy.spatial.distance import cdist
 
 class EstimadorEspacial:
@@ -198,7 +198,7 @@ class EstimadorEspacial:
             # Split
             x_tr, x_te = self.x_train[train_idx], self.x_train[test_idx]
             z_tr, z_te = self.z_train[train_idx], self.z_train[test_idx]
-            attr_tr, attr_te = self.atributo_train[train_idx], self.atributo_train[test_idx]
+            attr_tr, attr_te = self.attr_train[train_idx], self.attr_train[test_idx]
             
             # Crear modelo temporal
             estimador_temp = EstimadorEspacial(metodo=self.metodo, **self.kwargs)
