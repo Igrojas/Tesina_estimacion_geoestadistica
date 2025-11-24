@@ -592,7 +592,6 @@ class VisualizadorClusters:
 
         return fig
 
-
     def plot_interpolacion(self, interpolador, mostrar_puntos=True,
                             guardar=True, nombre_archivo=None, mostrar=True):
 
