@@ -16,7 +16,7 @@ print("✅ Imports exitosos")
 # ============================================================
 # CELDA 2: Cargar datos
 # ============================================================
-df = pd.read_csv("data/raw/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv("../data/raw/bd_dm_cmp_entry.csv", sep=";")
 columnas = ["midx", "midy", "midz", "starkey_min"]
 df = df[columnas].copy()
 

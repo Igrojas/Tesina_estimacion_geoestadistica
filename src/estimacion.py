@@ -9,6 +9,77 @@ import numpy as np
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 
+
+class EstimadorEspacial:
+    """
+    Estimador espacial genérico que puede usar diferentes métodos.
+    Actualmente solo soporta KNN.
+    
+    Parámetros:
+    -----------
+    metodo : str, default='knn'
+        Método de estimación ('knn' por ahora)
+    n_neighbors : int, default=10
+        Número de vecinos para KNN
+    """
+    
+    def __init__(self, metodo='knn', n_neighbors=10):
+        self.metodo = metodo
+        self.n_neighbors = n_neighbors
+        self.modelo = None
+        self.scaler = StandardScaler()
+        self.ajustado = False
+        
+    def fit(self, x, z, attr):
+        """
+        Entrena el estimador con datos espaciales.
+        
+        Parámetros:
+        -----------
+        x : array-like
+            Coordenadas X
+        z : array-like
+            Coordenadas Z
+        attr : array-like
+            Valores del atributo a predecir
+        """
+        if self.metodo == 'knn':
+            coords = np.column_stack([x, z])
+            coords_scaled = self.scaler.fit_transform(coords)
+            
+            self.modelo = KNeighborsRegressor(
+                n_neighbors=self.n_neighbors,
+                weights='distance'
+            )
+            self.modelo.fit(coords_scaled, attr)
+        else:
+            raise ValueError(f"Método '{self.metodo}' no soportado")
+        
+        self.ajustado = True
+        return self
+    
+    def predict(self, x, z):
+        """
+        Predice valores para nuevas coordenadas.
+        
+        Parámetros:
+        -----------
+        x : array-like
+            Coordenadas X
+        z : array-like
+            Coordenadas Z
+            
+        Retorna:
+        --------
+        array : Predicciones
+        """
+        if not self.ajustado:
+            raise ValueError("El modelo no está ajustado. Ejecuta fit() primero.")
+        
+        coords = np.column_stack([x, z])
+        coords_scaled = self.scaler.transform(coords)
+        return self.modelo.predict(coords_scaled)
+
 class EstimadorPorCluster:
 
     def __init__(self, n_neighbors=10):

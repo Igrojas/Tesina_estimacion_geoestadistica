@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 from src.clustering import ClusterKmeans
 
-df = pd.read_csv('data/raw/bd_dm_cmp_entry.csv', sep=';')
+df = pd.read_csv('../data/raw/bd_dm_cmp_entry.csv', sep=';')
 # Filtrar columnas
 columnas = ["midx", "midy", "midz", "starkey_min"]
 df = df[columnas].copy()
