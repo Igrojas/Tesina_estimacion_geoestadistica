@@ -10,8 +10,6 @@ Este script muestra cómo usar:
 3. EstimadorEspacial (estimacion.py)
 4. VisualizadorClusters (visualizacion.py)
 """
-
-
 # ============================================================
 # IMPORTS
 # ============================================================
@@ -36,9 +34,6 @@ from src.clustering import ClusterKmeans
 from src.interpolacion import InterpoladorEspacial
 from src.estimacion import EstimadorEspacial
 from src.visualizacion import VisualizadorClusters
-
-
-
 #%%
 # ============================================================
 # PASO 1: CARGAR DATOS
@@ -47,7 +42,7 @@ print("="*70)
 print("PASO 1: CARGAR DATOS")
 print("="*70)
 
-df = pd.read_csv("../data/raw/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv("data/raw/bd_dm_cmp_entry.csv", sep=";")
 columnas = ["midx", "midy", "midz", "starkey_min"]
 df = df[columnas].copy()
 
@@ -66,7 +61,7 @@ print("PASO 2: CLUSTERING - ClusterKmeans")
 print("="*70)
 
 # Crear clusterer
-clusterer = ClusterKmeans(n_clusters=5, w_spatial=0.0)
+clusterer = ClusterKmeans(n_clusters=5, w_spatial=0.8)
 
 # Entrenar
 clusterer.fit(x, z, atributo)

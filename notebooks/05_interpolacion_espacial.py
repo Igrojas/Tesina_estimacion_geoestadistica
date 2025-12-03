@@ -1,5 +1,4 @@
 #%% 
-
 import sys
 sys.path.append('../')
 
@@ -14,7 +13,7 @@ from src.visualizacion import VisualizadorClusters
 
 print("✅ Imports exitosos")
 
-df = pd.read_csv("../data/raw/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv("data/raw/bd_dm_cmp_entry.csv", sep=";")
 columnas = ["midx", "midy", "midz", "starkey_min"]
 df = df[columnas].copy()
 
@@ -56,8 +55,8 @@ viz.plot_comparacion_n_neighbors(interpoladores)
 #%%
 
 configuraciones = [
-    {'n_clusters': 5, 'w_spatial': 0.3},
     {'n_clusters': 5, 'w_spatial': 0.5},
+    {'n_clusters': 5, 'w_spatial': 0.8},
     # {'n_clusters': 5, 'w_spatial': 0.7},
 ]
 
@@ -106,4 +105,7 @@ plt.show()
 
 print("✅ Comparación guardada")
 
+
+
+# %%
 
