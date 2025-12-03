@@ -5,6 +5,7 @@ Con KNN
 
 
 import numpy as np
+import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 from pathlib import Path
@@ -74,6 +75,43 @@ class InterpoladorEspacial:
 
         print("Interpolación exitosa")
         return self
+
+    def get_dataframe(self):
+        """
+        Retorna un DataFrame con puntos originales y fantasmas.
+        
+        Retorna:
+        --------
+        pd.DataFrame
+            DataFrame con columnas: x, z, variable, cluster, tipo
+            - tipo='original' para puntos conocidos
+            - tipo='fantasma' para puntos interpolados
+        """
+        if not self.interpolado:
+            raise ValueError("Debe ejecutar interpolar() antes de obtener el DataFrame")
+        
+        # DataFrame de puntos originales
+        df_originales = pd.DataFrame({
+            'x': self.clusterer.x_original,
+            'z': self.clusterer.z_original,
+            'variable': self.clusterer.attr_original,
+            'cluster': self.clusterer.clusters,
+            'tipo': 'original'
+        })
+        
+        # DataFrame de puntos fantasmas
+        df_fantasmas = pd.DataFrame({
+            'x': self.xx.flatten(),
+            'z': self.zz.flatten(),
+            'variable': np.nan,  # No tenemos el valor de la variable para puntos fantasmas
+            'cluster': self.clusters_interpolados.flatten(),
+            'tipo': 'fantasma'
+        })
+        
+        # Concatenar ambos DataFrames
+        df_completo = pd.concat([df_originales, df_fantasmas], ignore_index=True)
+        
+        return df_completo
 
     def get_info(self):
 
