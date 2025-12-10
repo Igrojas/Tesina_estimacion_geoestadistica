@@ -57,24 +57,29 @@ def analizar_matriz(A, flujos_medidos):
         't': t,
         'Q': Q_round,
         'R': R_round,
+        'A_x': A_x,
         'A_u': A_u
     }
 
 # Ejemplo de uso:
 if __name__ == "__main__":
     A = np.array([
-        [        1,  0,  0,  0,  0,  0,  0,  0, -1, -1],  # Nodo 3
-        [        0, -1, -1,  0,  0,  0,  0,  0,  0,  1],  # Nodo 4
-        [        0,  0,  1, -1,  0,  0,  1,  0,  0,  0],  # Nodo 5
-        [        0,  0,  0,  1, -1,  0,  0, -1,  0,  0],  # Nodo 6
-        [        0,  0,  0,  0,  1, -1, -1,  0,  0,  0]   # Nodo 7
+        [        1,  -1,  -1,  0,  0,  0,  0,  0, 0, 0],  # Nodo 3
+        [        0,   1, 0,  -1,  -1,  0,  0,  0,  0,  0],  # Nodo 4
+        [        0,   0,  0, 0,  1,  -1,  0,  0,  1,  0],  # Nodo 5
+        [        0,   0,  0,  0, 0,  1,  -1, -1,  0,  0],  # Nodo 6
+        [        0,   0,  0,  0,  0, 0, 0,  1,  -1,  -1]   # Nodo 7
     ])
-    flujos_medidos = [1,2,3]
+    flujos_medidos = [2,4,5,6]
 
+    dict_resultados = analizar_matriz(A, flujos_medidos)
+#%%
+dict_resultados["A_u"]
+dict_resultados["A_x"]
+dict_resultados["Q"][:1,2].T
 
-
-    analizar_matriz(A, flujos_medidos)
-
+# print(np.dot(dict_resultados["Q"][:,-1].T, dict_resultados["A_x"]))
+print(np.dot(dict_resultados["Q"][:,-1].T, dict_resultados["A_u"]))
 
 
 
