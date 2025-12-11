@@ -25,14 +25,14 @@ class ClusterKmeans:
         self.attr_original = None
         self.ajustado = False
 
-    def fit(self, x, z, attr):
+    def fit(self, x, y, z, attr):
 
         self.x_original = x
-        # self.y_original = y
+        self.y_original = y
         self.z_original = z
         self.attr_original = attr
 
-        coords = np.column_stack([x, z])
+        coords = np.column_stack([x, y, z])
         coords_scaled = self.scaler_coords.fit_transform(coords)
 
         attr_scaled = self.scaler_attr.fit_transform(attr.reshape(-1, 1))
@@ -43,8 +43,7 @@ class ClusterKmeans:
         features = np.column_stack([coords_weighted, attr_weighted])
 
         self.kmeans = KMeans(
-                            n_clusters=self.n_clusters, 
-                            random_state=42, 
+                            n_clusters=self.n_clusters,
                             n_init=10)
 
         self.clusters = self.kmeans.fit_predict(features)

@@ -440,16 +440,17 @@ class VisualizadorClusters:
         1. Efecto proporcional (Coeficiente de variación por cluster)
         2. Lognormal Probability Plot por cluster
         3. Boxplots del atributo por cluster
-        4. Mapa de clusters igual que plot_clusters
+        4. Mapa 3D de clusters (scatter 3D)
         """
         if not clusterer.ajustado:
             raise ValueError("❌ El clusterer debe estar entrenado")
-
+        
         import numpy as np
         import pandas as pd
         from scipy.stats import lognorm
+        import matplotlib.gridspec as gridspec
+        import seaborn as sns
 
-        # Preparar datos y métricas
         stats_clusters = clusterer.get_stats()
         n_clusters = clusterer.n_clusters
 
@@ -458,128 +459,140 @@ class VisualizadorClusters:
             'cluster': clusterer.clusters
         })
 
-        # Paleta fija para clusters: cada cluster tiene el mismo color en todos los ejes
+        # Paleta de colores consistente
         palette = self.get_cluster_palette(n_clusters)
         cluster_color_dict = {i: palette[i] for i in range(n_clusters)}  # cluster_id -> color RGB
 
-        # ==== FIGURA 2x2 ====
-        fig, axs = plt.subplots(2, 2, figsize=(20, 14))
+        # --- Usamos GridSpec para controlar espacio de subplots ---
+        fig = plt.figure(figsize=(18, 10))
+        # Grid de 2x2, pero la 3D ocupa toda la derecha (filas 0:2 y col 1)
+        gs = gridspec.GridSpec(2, 3, width_ratios=[1, 1.1, 1.6], height_ratios=[1, 1])
 
-        # --- (0,0) Efecto proporcional (Coeficiente de variación por cluster)
-        ax0 = axs[0, 0]
+        # (0, 0) Efecto proporcional
+        ax0 = fig.add_subplot(gs[0, 0])
         cvs = [stats_clusters[i].get('efecto_proporcional', np.nan) for i in range(n_clusters)]
         clusters_x = np.arange(n_clusters)
         legend_handles = []
-        legend_labels = []
-        # Cada punto con color de cluster y leyenda para cada uno
         for i in range(n_clusters):
-            sc = ax0.scatter(clusters_x[i], cvs[i], color=cluster_color_dict[i], s=110, zorder=3, label=f'Cluster {i}')
+            sc = ax0.scatter(clusters_x[i], cvs[i], color=cluster_color_dict[i], s=80, zorder=3, label=f'Cluster {i}')
             legend_handles.append(sc)
-            legend_labels.append(f'Cluster {i}')
-        # Linea de tendencia (crimson)
         z = np.polyfit(clusters_x, cvs, 1)
         p = np.poly1d(z)
         ln, = ax0.plot(clusters_x, p(clusters_x), color='crimson', linestyle='--', linewidth=2, label='Tendencia lineal')
-        legend_handles.append(ln)
-        legend_labels.append('Tendencia lineal')
-        # Etiquetas de puntos, también con color
         for i, cv in enumerate(cvs):
-            ax0.text(i, cv + 0.001, f"{cv:.2f}", ha='center', va='bottom', fontsize=16, fontweight='bold', color='black')
-        ax0.set_xlabel('Cluster', fontsize=11)
-        ax0.set_ylabel('Coef. de Variación (std/media)', fontsize=11)
-        ax0.set_title('Efecto Proporcional (CV) por Cluster', fontweight='bold', fontsize=13)
+            ax0.text(i, cv + 0.001, f"{cv:.2f}", ha='center', va='bottom', fontsize=11, fontweight='bold', color='black')
+        ax0.set_xlabel('Cluster', fontsize=10)
+        ax0.set_ylabel('Coef. de Variación\n(std/media)', fontsize=10)
+        ax0.set_title('Efecto proporcional (CV)', fontweight='bold', fontsize=12)
         ax0.grid(axis='y', alpha=0.3)
-        # Mostrar leyenda completa de clusters + tendencia
-        ax0.legend(legend_handles, legend_labels)
+        handles = legend_handles + [ln]
+        labels = [f'Cluster {i}' for i in range(n_clusters)] + ['Tendencia lineal']
+        ax0.legend(handles, labels, fontsize=8, frameon=True, loc='upper right')
 
-        # --- (0,1) Probability lognormal plot por cluster
-        ax1 = axs[0, 1]
+        # (0, 1) Probability lognormal plot
+        ax1 = fig.add_subplot(gs[0, 1])
         all_handles = []
         all_labels = []
         for i in range(n_clusters):
             data = df_temp[df_temp["cluster"] == i]["atributo"].dropna().values
+            original_len = len(data)
+            data = data[data > 0]
+            num_invalid = original_len - len(data)
             if len(data) < 3:
                 continue
-            shape, loc, scale = lognorm.fit(data, floc=0)
-            sorted_data = np.sort(data)
-            prob = (np.arange(1, len(sorted_data) + 1) - 0.5) / len(sorted_data)
-            theo = lognorm.ppf(prob, shape, loc=loc, scale=scale)
-            color = cluster_color_dict[i]
-            line_data, = ax1.plot(sorted_data, prob, marker='o', linestyle='', color=color, label=f'Cluster {i} datos')
-            line_theo, = ax1.plot(theo, prob, linestyle='-', color=color, alpha=0.7, label=f'Cluster {i} lognorm')
-            all_handles.extend([line_data, line_theo])
-            all_labels.extend([f'Cluster {i} datos', f'Cluster {i} lognorm'])
-        ax1.set_xlabel('starkey_min')
-        ax1.set_ylabel('Probabilidad no excedencia')
-        ax1.set_title(f'Probability Lognormal Plot\npor Cluster')
+            try:
+                shape, loc, scale = lognorm.fit(data, floc=0)
+                if scale <= 0 or shape <= 0 or np.any(np.isnan(data)):
+                    continue
+                sorted_data = np.sort(data)
+                prob = (np.arange(1, len(sorted_data) + 1) - 0.5) / len(sorted_data)
+                theo = lognorm.ppf(prob, shape, loc=loc, scale=scale)
+                color = cluster_color_dict[i]
+                line_data, = ax1.plot(sorted_data, prob, marker='o', linestyle='', color=color, 
+                                      markersize=3.2, label=f'Cluster {i} datos')
+                line_theo, = ax1.plot(theo, prob, linestyle='-', color=color, alpha=0.7, 
+                                      linewidth=2, label=f'Cluster {i} lognorm')
+                all_handles.extend([line_data, line_theo])
+                all_labels.extend([f'Cluster {i} datos', f'Cluster {i} lognorm'])
+                if num_invalid > 0:
+                    ax1.annotate(f"Excl. {num_invalid} ≤0", 
+                                 xy=(sorted_data[0], prob[0]), xytext=(8,6),
+                                 textcoords='offset points', fontsize=7, color=color)
+            except Exception as e:
+                ax1.annotate(f"No válido c{i} ({type(e).__name__})", 
+                             xy=(0.03, 0.97 - i*0.045), xycoords='axes fraction',
+                             fontsize=8, color=cluster_color_dict[i])
+        ax1.set_xlabel('starkey_min', fontsize=10)
+        ax1.set_ylabel('Probabilidad\nno excedencia', fontsize=10)
+        ax1.set_title('Lognorm Probability Plot', fontweight='bold', fontsize=12)
+        ax1.set_xscale('log')
         ax1.set_yscale('logit')
-        ax1.grid(alpha=0.25, which='both')
+        ax1.grid(alpha=0.18, which='both')
         if all_handles:
-            ax1.legend(all_handles, all_labels, fontsize=8, loc="best", frameon=True)
+            ax1.legend(all_handles, all_labels, fontsize=7, loc="best", frameon=True)
 
-        # --- (1,0) Boxplots de atributo por cluster
-        ax2 = axs[1, 0]
-        import seaborn as sns
-        sns.boxplot(x='cluster', y='atributo', data=df_temp, palette=palette, ax=ax2)
-        scatter_handles = []
+        # (1, 0) Boxplots del atributo
+        ax2 = fig.add_subplot(gs[1, 0])
+        sns.boxplot(x='cluster', y='atributo', data=df_temp, palette=palette, ax=ax2, width=0.75, fliersize=2.5)
         for i in range(n_clusters):
             media_val = stats_clusters[i].get('mean', np.nan)
             sc = ax2.scatter(i, media_val,
-                        color='crimson', s=50, marker='D', zorder=10,
-                        edgecolor='black', linewidth=0.5, label='Media')
-            scatter_handles.append(sc)
-        ax2.set_xlabel('Cluster', fontsize=11)
-        ax2.set_ylabel('Atributo (starkey_min)', fontsize=11)
-        ax2.set_title('Distribución de Atributo por Cluster', fontweight='bold', fontsize=13)
-        ax2.grid(axis='y', alpha=0.3)
-        if scatter_handles:
-            ax2.legend([scatter_handles[0]], ['Media'], loc='best')
+                        color='crimson', s=40, marker='D', zorder=10,
+                        edgecolor='black', linewidth=0.4, label='Media' if i == 0 else "")
+        ax2.set_xlabel('Cluster', fontsize=10)
+        ax2.set_ylabel('Atributo\n(starkey_min)', fontsize=10)
+        ax2.set_title('Boxplot por cluster', fontweight='bold', fontsize=12)
+        ax2.grid(axis='y', alpha=0.28)
+        ax2.legend([sc], ['Media'], loc='best', fontsize=8)
 
-        # --- (1,1) El mismo gráfico que plot_clusters
-        ax3 = axs[1, 1]
-        # PREPARACIÓN de los datos igual que en plot_clusters
+        # (0:2, 2) Scatter 3D de clusters (ocupa ambas filas derecha)
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+        ax3 = fig.add_subplot(gs[:, 2], projection='3d')
+        x3d = clusterer.x_original
+        y3d = clusterer.y_original
+        z3d = clusterer.z_original
         cluster_colors = np.array([cluster_color_dict[c] for c in clusterer.clusters])
-        scatter = ax3.scatter(
-            clusterer.x_original, 
-            clusterer.z_original,
+        sc3d = ax3.scatter(
+            x3d, y3d, z3d,
             c=cluster_colors,
-            s=50,
-            alpha=0.7,
+            s=30,
+            alpha=0.83,
             edgecolors='k',
-            linewidth=0.5
-        )
-        # Título como plot_clusters
-        titulo = (f'Clustering K-means\n'
-                  f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}')
-        ax3.set_title(titulo, fontweight='bold', fontsize=14)
-        ax3.set_xlabel('X (midx)', fontsize=12)
-        ax3.set_ylabel('Z (midz)', fontsize=12)
-        ax3.grid(alpha=0.3)
+            linewidth=0.5)
+        titulo = (f'Clustering K-means (3D)\nk={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}')
+        ax3.set_title(titulo, fontweight='bold', fontsize=13, pad=9)
+        ax3.set_xlabel('X (midx)', fontsize=10)
+        ax3.set_ylabel('Y (midy)', fontsize=10)
+        ax3.set_zlabel('Z (midz)', fontsize=10)
+        ax3.grid(alpha=0.26)
+        # Leyenda 3D
         unique_clusters = np.unique(clusterer.clusters)
-        handles = [plt.Line2D([0], [0], marker='o', color='w',
-                              markerfacecolor=cluster_color_dict[k], markeredgecolor='k',
-                              markersize=10, label=f'Cluster {k}') for k in unique_clusters]
-        ax3.legend(handles=handles, title='Cluster', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
+        handles_3d = [plt.Line2D([0], [0], marker='o', color='w',
+                                markerfacecolor=cluster_color_dict[k], markeredgecolor='k',
+                                markersize=8, label=f'Cluster {k}') for k in unique_clusters]
+        ax3.legend(handles=handles_3d, title='Cluster', loc='best', fontsize=9, frameon=True)
+        # Métrica
         metricas = clusterer.get_global_metrics()
         texto_metrica = f"Std prom: {metricas['std_prom']:.2f}"
-        ax3.text(0.02, 0.98, texto_metrica,
-                 transform=ax3.transAxes,
-                 verticalalignment='top',
-                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
-                 fontsize=10)
+        ax3.text2D(0.04, 0.97, texto_metrica,
+                transform=ax3.figure.transFigure,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+                fontsize=9)
 
-        # --- Título
-        fig.suptitle(f"Dashboard 2x2 - Clustering K-means\nk={n_clusters}, peso_espacial={clusterer.w_spatial:.2f}",
-                     fontsize=18, fontweight='bold', y=0.99)
+        # Título global
+        fig.suptitle(
+            f"Dashboard 2x2 - Clustering K-means\nk={n_clusters}, peso_espacial={clusterer.w_spatial:.2f}",
+            fontsize=17, fontweight='bold', y=0.995)
 
-        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.subplots_adjust(left=0.042, right=0.98, bottom=0.06, top=0.92, hspace=0.23, wspace=0.18)
 
         # Guardar
         if guardar:
             if nombre_archivo is None:
                 from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                nombre_archivo = f"dashboard2x2_k{n_clusters}_w{int(clusterer.w_spatial*100)}_{timestamp}.png"
+                nombre_archivo = f"dashboard2x2_3d_k{n_clusters}_w{int(clusterer.w_spatial*100)}_{timestamp}.png"
 
             ruta = self.carpeta_salida / nombre_archivo
             plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')

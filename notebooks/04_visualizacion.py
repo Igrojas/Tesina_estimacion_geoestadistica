@@ -15,32 +15,33 @@ VisualizadorClusters = importlib.reload(importlib.import_module('src.visualizaci
 
 print("✅ Imports exitosos")
 
-df = pd.read_csv("../data/raw/bd_dm_cmp_entry.csv", sep=";")
+df = pd.read_csv('data/raw/com_p_plt_entry 1.csv', sep=',')
 
-columnas = ["midx", "midy", "midz", "starkey_min", "bwi_kwh_tc"]
+columnas = ["midx", "midy", "midz", "cut"]
 df = df[columnas].copy()
-
+df = df.sample(frac=0.01)
 x = df['midx'].values
+y = df['midy'].values
 z = df['midz'].values
-atributo = df['bwi_kwh_tc'].values
+atributo = df['cut'].values
 
 print(f"📊 Datos cargados: {len(df)} puntos")
 
-clusterer = ClusterKmeans(n_clusters=4, w_spatial=0.65)
-clusterer.fit(x, z, atributo)
+clusterer = ClusterKmeans(n_clusters=7, w_spatial=0.5)
+clusterer.fit(x, y, z, atributo)
 
 visualizador = VisualizadorClusters()
 # visualizador.plot_clusters(clusterer)
 # visualizador.plot_atributo_real(clusterer)
 # visualizador.plot_comparacion(clusterer)
-# visualizador.crear_dashboard(clusterer, guardar=False)
+visualizador.crear_dashboard(clusterer, guardar=False)
 
 
 
-w_spatial_values = [0.25, 0.5, 0.75, 1.0]
-n_clusters_list = [3, 4, 5, 6]
-from itertools import product
-for n_clust, w_spatial in product(n_clusters_list, w_spatial_values):
-    clusterer = ClusterKmeans(n_clusters=n_clust, w_spatial=w_spatial)
-    clusterer.fit(x, z, atributo)
-    visualizador.crear_dashboard(clusterer, guardar=True)
+# w_spatial_values = [0.25, 0.5, 0.75, 1.0]
+# n_clusters_list = [3, 4, 5, 6]
+# from itertools import product
+# for n_clust, w_spatial in product(n_clusters_list, w_spatial_values):
+#     clusterer = ClusterKmeans(n_clusters=n_clust, w_spatial=w_spatial)
+#     clusterer.fit(x, y, z, atributo)
+#     visualizador.crear_dashboard(clusterer, guardar=True)

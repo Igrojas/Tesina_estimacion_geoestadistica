@@ -9,27 +9,35 @@ import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 
-from src.clustering import ClusterKmeans
+import importlib
+ClusterKmeans = importlib.reload(importlib.import_module('src.clustering')).ClusterKmeans
 
-df = pd.read_csv('../data/raw/bd_dm_cmp_entry.csv', sep=';')
+df = pd.read_csv('data/raw/com_p_plt_entry 1.csv', sep=',')
 # Filtrar columnas
-columnas = ["midx", "midy", "midz", "starkey_min"]
-df = df[columnas].copy()
+midx = "midx"
+midy = "midy"
+midz = "midz"
+cut  = "cus"
+
+df = df[[midx, midy, midz, cut]].copy()
+df = df.sample(frac=0.01) 
 
 # Extraer coordenadas y atributo
-x = df['midx'].values
-z = df['midz'].values
-atributo = df['starkey_min'].values
+x = df[midx].values
+y = df[midy].values
+z = df[midz].values
+atributo = df[cut].values
 
 print(f"📊 Datos cargados: {len(df)} puntos")
 print(f"📏 Rango X: [{x.min():.0f}, {x.max():.0f}]")
+print(f"📏 Rango Y: [{y.min():.0f}, {y.max():.0f}]")
 print(f"📏 Rango Z: [{z.min():.0f}, {z.max():.0f}]")
 print(f"📊 Rango atributo: [{atributo.min():.2f}, {atributo.max():.2f}]")
 
 # ============================================================
 # CELDA 3: Crear objeto (sin entrenar)
 # ============================================================
-clusterer = ClusterKmeans(n_clusters=5)
+clusterer = ClusterKmeans(n_clusters=7, w_spatial=0.8)
 
 # Ver objeto sin entrenar
 print(clusterer)
@@ -37,7 +45,7 @@ print(clusterer)
 # ============================================================
 # CELDA 4: Entrenar
 # ============================================================
-clusterer.fit(x, z, atributo)
+clusterer.fit(x, y, z, atributo)
 
 # Ver objeto entrenado
 print(clusterer)
@@ -55,30 +63,35 @@ clusterer.summary_plot()
 # ============================================================
 # CELDA 6: Visualización básica
 # ============================================================
-plt.figure(figsize=(12, 5))
+from mpl_toolkits.mplot3d import Axes3D
 
-# Subplot 1: Clusters
-plt.subplot(1, 2, 1)
-scatter = plt.scatter(x, z, c=clusters, cmap='viridis', 
-                     s=50, alpha=0.7, edgecolor='k', linewidth=0.5)
-plt.colorbar(scatter, label='Cluster')
-plt.title(f'Clustering K-means (k={clusterer.n_clusters})')
-plt.xlabel('X (midx)')
-plt.ylabel('Z (midz)')
-plt.grid(alpha=0.3)
+fig = plt.figure(figsize=(14, 6))
 
-# Subplot 2: Atributo real
-plt.subplot(1, 2, 2)
-scatter2 = plt.scatter(x, z, c=atributo, cmap='RdYlBu_r',
-                       s=50, alpha=0.7, edgecolor='k', linewidth=0.5)
-plt.colorbar(scatter2, label='starkey_min')
-plt.title('Atributo Real')
-plt.xlabel('X (midx)')
-plt.ylabel('Z (midz)')
-plt.grid(alpha=0.3)
+# Subplot 1: Clusters en 3D
+ax1 = fig.add_subplot(1, 2, 1, projection='3d')
+sc1 = ax1.scatter(x, y, z, c=clusters, cmap='viridis',
+                  s=50, alpha=0.7, edgecolor='k', linewidth=0.5)
+cb1 = fig.colorbar(sc1, ax=ax1, shrink=0.7, pad=0.1, label='Cluster')
+ax1.set_title(f'Clustering K-means 3D (k={clusterer.n_clusters})')
+ax1.set_xlabel('X (midx)')
+ax1.set_ylabel('Y (midy)')
+ax1.set_zlabel('Z (midz)')
+ax1.grid(alpha=0.3)
+ax1.view_init(elev=20, azim=40)
+
+# Subplot 2: Atributo real en 3D
+ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+sc2 = ax2.scatter(x, y, z, c=atributo, cmap='RdYlBu_r',
+                  s=50, alpha=0.7, edgecolor='k', linewidth=0.5)
+cb2 = fig.colorbar(sc2, ax=ax2, shrink=0.7, pad=0.1, label='starkey_min')
+ax2.set_title('Atributo Real 3D')
+ax2.set_xlabel('X (midx)')
+ax2.set_ylabel('Y (midy)')
+ax2.set_zlabel('Z (midz)')
+ax2.grid(alpha=0.3)
+ax2.view_init(elev=20, azim=40)
 
 plt.tight_layout()
-# plt.savefig('../results/figures/01_clustering_basico.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 # ============================================================
@@ -102,31 +115,33 @@ df_stats.index.name = 'Cluster'
 # CELDA 8: Probar diferentes valores de k
 # ============================================================
 #%%
+
 valores_k = [3, 4, 5, 6, 7, 8]
 
-fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-axes = axes.flatten()
+fig = plt.figure(figsize=(18, 10))
 
 for idx, k in enumerate(valores_k):
     # Crear y entrenar
-    clust = ClusterKmeans(n_clusters=k)
-    clust.fit(x, z, atributo)
+    clust = ClusterKmeans(n_clusters=k, w_spatial=0.7)
+    clust.fit(x, y, z, atributo)
     
     # Visualizar
-    axes[idx].scatter(x, z, c=clust.clusters, cmap='viridis',
-                     s=30, alpha=0.7, edgecolor='k', linewidth=0.3)
-    axes[idx].set_title(f'k = {k}', fontweight='bold', fontsize=14)
-    axes[idx].set_xlabel('X (midx)')
-    axes[idx].set_ylabel('Z (midz)')
-    axes[idx].grid(alpha=0.3)
+    ax = fig.add_subplot(2, 3, idx + 1, projection='3d')
+    ax.scatter(x, y, z, c=clust.clusters, cmap='viridis',
+               s=30, alpha=0.7, edgecolor='k', linewidth=0.3)
+    ax.set_title(f'k = {k}', fontweight='bold', fontsize=14)
+    ax.set_xlabel('X (midx)')
+    ax.set_ylabel('Y (midy)')
+    ax.set_zlabel('Z (midz)')
+    ax.grid(alpha=0.3)
     
     # Agregar métrica
     stats = clust.get_stats()
     std_prom = np.mean([s['mean'] for s in stats.values()])
-    axes[idx].text(0.02, 0.98, f'Mean prom: {std_prom:.2f}',
-                   transform=axes[idx].transAxes,
-                   verticalalignment='top',
-                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    ax.text2D(0.02, 0.98, f'Mean prom: {std_prom:.2f}',
+              transform=ax.transAxes,
+              verticalalignment='top',
+              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 
 plt.tight_layout()
 # plt.savefig('../results/figures/01_comparacion_k_valores.png', dpi=150, bbox_inches='tight')
@@ -141,9 +156,9 @@ clusterer_balanceado = ClusterKmeans(n_clusters=5, w_spatial=0.5)
 clusterer_espacial = ClusterKmeans(n_clusters=5, w_spatial=0.8)
 
 print("Entrenando clusterers...")
-clusterer_tradicional.fit(x, z, atributo)
-clusterer_balanceado.fit(x, z, atributo)
-clusterer_espacial.fit(x, z, atributo)
+clusterer_tradicional.fit(x, y, z, atributo)
+clusterer_balanceado.fit(x, y, z, atributo)
+clusterer_espacial.fit(x, y, z, atributo)
 
 print("Clusterers entrenados.")
 
@@ -164,7 +179,6 @@ clusterer_espacial.summary_plot()
 # ============================================================
 # CELDA 6: Visualización comparativa
 # ============================================================
-fig, axes = plt.subplots(1, 3, figsize=(20, 5))
 
 # Configuración de los tres modelos
 modelos = [
@@ -173,27 +187,56 @@ modelos = [
     (clusterer_espacial, "Espacial (w=0.8)\n80% Espacio + 20% Atributo")
 ]
 
+from mpl_toolkits.mplot3d import Axes3D  # importa para habilitar proyección 3D
+from matplotlib import colors
+
+# Usamos una ListedColormap para colores de clusters enteros
+cluster_cmap = colors.ListedColormap(
+    ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+)
+
+fig = plt.figure(figsize=(20, 10))
+axes = [fig.add_subplot(1, 3, i+1, projection='3d') for i in range(3)]
+
 for idx, (modelo, titulo) in enumerate(modelos):
     ax = axes[idx]
-    
-    # Graficar clusters
-    scatter = ax.scatter(x, z, c=modelo.clusters, cmap='viridis',
-                        s=50, alpha=0.7, edgecolor='k', linewidth=0.5)
-    
+    n_clusters = len(set(modelo.clusters))  # número de clusters
+
+    # Graficar clusters (en 3D) usando colormap discreto y norm entero
+    scatter = ax.scatter(
+        x, y, z,
+        c=modelo.clusters,
+        cmap=cluster_cmap,
+        norm=colors.BoundaryNorm(boundaries=np.arange(-0.5, n_clusters+0.5, 1), ncolors=n_clusters),
+        s=50, alpha=0.7, edgecolor='k', linewidth=0.5
+    )
+
     ax.set_title(titulo, fontweight='bold', fontsize=12)
     ax.set_xlabel('X (midx)')
-    ax.set_ylabel('Z (midz)')
+    ax.set_ylabel('Y (midy)')
+    ax.set_zlabel('Z (midz)')
     ax.grid(alpha=0.3)
-    
+
     # Agregar métrica
     metricas = modelo.get_global_metrics()
-    ax.text(0.02, 0.98, f"Std prom: {metricas['std_prom']:.2f}",
-           transform=ax.transAxes,
-           verticalalignment='top',
-           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    
-    plt.colorbar(scatter, ax=ax, label='Cluster')
+    ax.text2D(0.02, 0.98, f"Std prom: {metricas['std_prom']:.2f}",
+              transform=ax.transAxes,
+              verticalalignment='top',
+              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+
+    # Colorbar con ticks para valores de cluster (enteros)
+    cbar = plt.colorbar(
+        scatter,
+        ax=ax,
+        label='Cluster',
+        shrink=0.6,
+        aspect=10,
+        pad=0.1,
+        ticks=np.arange(n_clusters)
+    )
+    cbar.ax.set_yticklabels([str(i) for i in range(n_clusters)])
 
 plt.tight_layout()
-    # plt.savefig('../results/figures/02_comparacion_pesos.png', dpi=150, bbox_inches='tight')
+# plt.savefig('../results/figures/02_comparacion_pesos.png', dpi=150, bbox_inches='tight')
 plt.show()
+#%%
