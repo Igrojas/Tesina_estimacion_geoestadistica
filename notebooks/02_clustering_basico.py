@@ -122,7 +122,7 @@ fig = plt.figure(figsize=(18, 10))
 
 for idx, k in enumerate(valores_k):
     # Crear y entrenar
-    clust = ClusterKmeans(n_clusters=k, w_spatial=0.7)
+    clust = ClusterKmeans(n_clusters=k, w_spatial=0.9)
     clust.fit(x, y, z, atributo)
     
     # Visualizar

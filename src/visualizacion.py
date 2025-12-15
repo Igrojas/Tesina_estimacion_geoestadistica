@@ -38,7 +38,7 @@ class VisualizadorClusters:
     """
     
     def __init__(self, carpeta_salida='results/figures', 
-                 estilo='seaborn-v0_8-darkgrid', dpi=150):
+                 estilo='default', dpi=150):
         """
         Inicializa el visualizador.
         
@@ -71,7 +71,7 @@ class VisualizadorClusters:
         return palette
 
     def plot_clusters(self, clusterer, titulo=None, guardar=True, 
-                     nombre_archivo=None, mostrar=True):
+                     nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Visualiza los clusters en 2D usando colores discretos para cada cluster!
         """
@@ -90,6 +90,7 @@ class VisualizadorClusters:
         # Scatter plot, con color fijo por cluster
         scatter = ax.scatter(
             clusterer.x_original, 
+            clusterer.y_original,
             clusterer.z_original,
             c=cluster_colors,
             s=50,
@@ -102,7 +103,7 @@ class VisualizadorClusters:
         if titulo is None:
             titulo = (f'Clustering K-means\n'
                      f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}')
-        ax.set_title(titulo, fontweight='bold', fontsize=14)
+        ax.set_title(str(titulo), fontweight='bold', fontsize=14)
         
         # Etiquetas
         ax.set_xlabel('X (midx)', fontsize=12)
@@ -145,7 +146,7 @@ class VisualizadorClusters:
         return fig, ax
     
     def plot_atributo_real(self, clusterer, titulo=None, guardar=True,
-                          nombre_archivo=None, mostrar=True):
+                          nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Visualiza el atributo real en 2D.
         
@@ -160,9 +161,10 @@ class VisualizadorClusters:
         # Scatter plot
         scatter = ax.scatter(
             clusterer.x_original,
+            clusterer.y_original,
             clusterer.z_original,
             c=clusterer.attr_original,
-            cmap=self.cmap_atributo,   # Dejar continuous cmap para variables continuas
+            cmap=self.cmap_atributo,
             s=50,
             alpha=0.7,
             edgecolors='k',
@@ -171,8 +173,8 @@ class VisualizadorClusters:
         
         # Título
         if titulo is None:
-            titulo = 'Atributo Real\n(starkey_min)'
-        ax.set_title(titulo, fontweight='bold', fontsize=14)
+            titulo = f'Atributo Real\n({nombre_atributo})'
+        ax.set_title(str(titulo), fontweight='bold', fontsize=14)
         
         # Etiquetas
         ax.set_xlabel('X (midx)', fontsize=12)
@@ -181,7 +183,7 @@ class VisualizadorClusters:
         
         # Colorbar
         cbar = plt.colorbar(scatter, ax=ax)
-        cbar.set_label('starkey_min', fontsize=11)
+        cbar.set_label(str(nombre_atributo), fontsize=11)
         
         plt.tight_layout()
         
@@ -202,7 +204,7 @@ class VisualizadorClusters:
         
         return fig, ax
     
-    def plot_comparacion(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True):
+    def plot_comparacion(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Compara clusters vs atributo real lado a lado.
         
@@ -263,12 +265,12 @@ class VisualizadorClusters:
             edgecolors='k',
             linewidth=0.5
         )
-        ax.set_title('Atributo Real (starkey_min)',
-                    fontweight='bold', fontsize=13)
+        # Generaliza el título y etiqueta del colorbar
+        ax.set_title(f'Atributo Real ({nombre_atributo})', fontweight='bold', fontsize=13)
         ax.set_xlabel('X (midx)', fontsize=11)
         ax.set_ylabel('Z (midz)', fontsize=11)
         ax.grid(alpha=0.3)
-        plt.colorbar(scatter2, ax=ax, label='starkey_min')
+        plt.colorbar(scatter2, ax=ax, label=str(nombre_atributo))
         
         plt.tight_layout()
         
@@ -289,7 +291,7 @@ class VisualizadorClusters:
         
         return fig, axes
     
-    def plot_estadisticas(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True):
+    def plot_estadisticas(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Visualiza estadísticas descriptivas por cluster.
         
@@ -344,9 +346,9 @@ class VisualizadorClusters:
         for i, (m, s) in enumerate(zip(medias, stds)):
             ax.text(m, s, str(clusters_ids[i]), fontsize=10, ha='center', va='center',
                    fontweight='bold', color='white')
-        ax.set_xlabel('Media de Atributo', fontsize=12)
+        ax.set_xlabel(f'Media de {nombre_atributo}', fontsize=12)
         ax.set_ylabel('Desviación Estándar', fontsize=12)
-        ax.set_title('Media vs Std por Cluster', fontweight='bold', fontsize=13)
+        ax.set_title(f'Media vs Std por Cluster', fontweight='bold', fontsize=13)
         ax.grid(alpha=0.3)
         
         # Línea de tendencia
@@ -376,7 +378,7 @@ class VisualizadorClusters:
         
         return fig, axes
     
-    def plot_boxplots(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True):
+    def plot_boxplots(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Crea boxplots del atributo por cluster.
         """
@@ -402,13 +404,13 @@ class VisualizadorClusters:
         # Agregar medias
         stats = clusterer.get_stats()
         medias = [stats[i]['media'] for i in range(clusterer.n_clusters)]
-        ax.scatter(range(clusterer.n_clusters), medias, 
+        ax.scatter(range(clusterer.n_clusters), medias,
                   color='red', s=100, marker='D', zorder=10,
                   label='Media', edgecolor='black', linewidth=1.5)
         
         ax.set_xlabel('Cluster', fontsize=12)
-        ax.set_ylabel('Atributo (starkey_min)', fontsize=12)
-        ax.set_title(f'Distribución de Atributo por Cluster (k={clusterer.n_clusters})',
+        ax.set_ylabel(f'Atributo ({nombre_atributo})', fontsize=12)
+        ax.set_title(f'Distribución de {nombre_atributo} por Cluster (k={clusterer.n_clusters})',
                     fontweight='bold', fontsize=13)
         ax.grid(axis='y', alpha=0.3)
         ax.legend()
@@ -432,13 +434,13 @@ class VisualizadorClusters:
         
         return fig, ax
     
-    def crear_dashboard(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True):
+    def crear_dashboard(self, clusterer, guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Crea un dashboard (2x2) con visualizaciones de clusters, mostrando todas las leyendas completas y específicas para cada gráfica.
 
         Orden:
         1. Efecto proporcional (Coeficiente de variación por cluster)
-        2. Lognormal Probability Plot por cluster
+        2. Probability Plot normal por cluster (usando log(atributo) en vez de atributo directo)
         3. Boxplots del atributo por cluster
         4. Mapa 3D de clusters (scatter 3D)
         """
@@ -447,7 +449,7 @@ class VisualizadorClusters:
         
         import numpy as np
         import pandas as pd
-        from scipy.stats import lognorm
+        from scipy.stats import norm
         import matplotlib.gridspec as gridspec
         import seaborn as sns
 
@@ -489,61 +491,57 @@ class VisualizadorClusters:
         labels = [f'Cluster {i}' for i in range(n_clusters)] + ['Tendencia lineal']
         ax0.legend(handles, labels, fontsize=8, frameon=True, loc='upper right')
 
-        # (0, 1) Probability lognormal plot
+        # (0, 1) Probability Plot NORMAL sobre log(atributo)
         ax1 = fig.add_subplot(gs[0, 1])
-        all_handles = []
-        all_labels = []
+
+        # Parámetros para etiquetas percentiles
+        percentile_labels = [0.1, 0.5, 1, 2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 98, 99, 99.5, 99.9]
+        z_ticks = norm.ppf(np.array(percentile_labels) / 100)
+        cluster_handles = []
+        cluster_labels = []
         for i in range(n_clusters):
             data = df_temp[df_temp["cluster"] == i]["atributo"].dropna().values
-            original_len = len(data)
+            # Usar únicamente valores > 0 para aplicar log
             data = data[data > 0]
-            num_invalid = original_len - len(data)
             if len(data) < 3:
                 continue
-            try:
-                shape, loc, scale = lognorm.fit(data, floc=0)
-                if scale <= 0 or shape <= 0 or np.any(np.isnan(data)):
-                    continue
-                sorted_data = np.sort(data)
-                prob = (np.arange(1, len(sorted_data) + 1) - 0.5) / len(sorted_data)
-                theo = lognorm.ppf(prob, shape, loc=loc, scale=scale)
-                color = cluster_color_dict[i]
-                line_data, = ax1.plot(sorted_data, prob, marker='o', linestyle='', color=color, 
-                                      markersize=3.2, label=f'Cluster {i} datos')
-                line_theo, = ax1.plot(theo, prob, linestyle='-', color=color, alpha=0.7, 
-                                      linewidth=2, label=f'Cluster {i} lognorm')
-                all_handles.extend([line_data, line_theo])
-                all_labels.extend([f'Cluster {i} datos', f'Cluster {i} lognorm'])
-                if num_invalid > 0:
-                    ax1.annotate(f"Excl. {num_invalid} ≤0", 
-                                 xy=(sorted_data[0], prob[0]), xytext=(8,6),
-                                 textcoords='offset points', fontsize=7, color=color)
-            except Exception as e:
-                ax1.annotate(f"No válido c{i} ({type(e).__name__})", 
-                             xy=(0.03, 0.97 - i*0.045), xycoords='axes fraction',
-                             fontsize=8, color=cluster_color_dict[i])
-        ax1.set_xlabel('starkey_min', fontsize=10)
-        ax1.set_ylabel('Probabilidad\nno excedencia', fontsize=10)
-        ax1.set_title('Lognorm Probability Plot', fontweight='bold', fontsize=12)
-        ax1.set_xscale('log')
-        ax1.set_yscale('logit')
-        ax1.grid(alpha=0.18, which='both')
-        if all_handles:
-            ax1.legend(all_handles, all_labels, fontsize=7, loc="best", frameon=True)
+            log_data = np.log(data)
+            # Ordenar
+            datos_sorted = np.sort(log_data)
+            n = len(datos_sorted)
+            percentiles = (np.arange(1, n + 1) - 0.5) / n * 100
+            # Convertir percentiles a z-scores (cuantiles normales)
+            z_scores = norm.ppf(percentiles / 100)
+            color = cluster_color_dict[i]
+            # Graficar puntos en normal prob plot
+            handle = ax1.plot(datos_sorted, z_scores, 'o', markersize=4, color=color, label=f'Cluster {i}')[0]
+            cluster_handles.append(handle)
+            cluster_labels.append(f'Cluster {i}')
+        ax1.set_yticks(z_ticks)
+        ax1.set_yticklabels([f'{p}' for p in percentile_labels])
+        ax1.set_xlabel(f'log(Atributo) (log({nombre_atributo}))', fontsize=10)
+        ax1.set_ylabel('Frecuencia acumulada', fontsize=10)
+        ax1.set_title(f'Gráfico de probabilidad normal (log) [{nombre_atributo}]', fontsize=12, fontweight='bold')
+        # ax1.set_xscale('log')
+        ax1.grid(True, linestyle='-', linewidth=0.5, alpha=0.7, which='both')
+        if cluster_handles:
+            ax1.legend(cluster_handles, cluster_labels, fontsize=8, loc='best', frameon=True)
 
         # (1, 0) Boxplots del atributo
         ax2 = fig.add_subplot(gs[1, 0])
         sns.boxplot(x='cluster', y='atributo', data=df_temp, palette=palette, ax=ax2, width=0.75, fliersize=2.5)
+        sc = None
         for i in range(n_clusters):
             media_val = stats_clusters[i].get('mean', np.nan)
             sc = ax2.scatter(i, media_val,
                         color='crimson', s=40, marker='D', zorder=10,
                         edgecolor='black', linewidth=0.4, label='Media' if i == 0 else "")
         ax2.set_xlabel('Cluster', fontsize=10)
-        ax2.set_ylabel('Atributo\n(starkey_min)', fontsize=10)
-        ax2.set_title('Boxplot por cluster', fontweight='bold', fontsize=12)
+        ax2.set_ylabel(f'Atributo\n({nombre_atributo})', fontsize=10)
+        ax2.set_title(f'Boxplot por cluster ({nombre_atributo})', fontweight='bold', fontsize=12)
         ax2.grid(axis='y', alpha=0.28)
-        ax2.legend([sc], ['Media'], loc='best', fontsize=8)
+        if sc is not None:
+            ax2.legend([sc], ['Media'], loc='best', fontsize=8)
 
         # (0:2, 2) Scatter 3D de clusters (ocupa ambas filas derecha)
         from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
@@ -559,8 +557,8 @@ class VisualizadorClusters:
             alpha=0.83,
             edgecolors='k',
             linewidth=0.5)
-        titulo = (f'Clustering K-means (3D)\nk={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}')
-        ax3.set_title(titulo, fontweight='bold', fontsize=13, pad=9)
+        titulo3d = (f'Clustering K-means (3D)\nk={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}')
+        ax3.set_title(titulo3d, fontweight='bold', fontsize=13, pad=9)
         ax3.set_xlabel('X (midx)', fontsize=10)
         ax3.set_ylabel('Y (midy)', fontsize=10)
         ax3.set_zlabel('Z (midz)', fontsize=10)
@@ -582,7 +580,7 @@ class VisualizadorClusters:
 
         # Título global
         fig.suptitle(
-            f"Dashboard 2x2 - Clustering K-means\nk={n_clusters}, peso_espacial={clusterer.w_spatial:.2f}",
+            f"Dashboard 2x2 - Clustering K-means\nk={n_clusters}, peso_espacial={clusterer.w_spatial:.2f}, atributo={nombre_atributo}",
             fontsize=17, fontweight='bold', y=0.995)
 
         plt.subplots_adjust(left=0.042, right=0.98, bottom=0.06, top=0.92, hspace=0.23, wspace=0.18)
@@ -606,7 +604,7 @@ class VisualizadorClusters:
         return fig
 
     def plot_interpolacion(self, interpolador, mostrar_puntos=True,
-                            guardar=True, nombre_archivo=None, mostrar=True):
+                            guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
 
 
         if not interpolador.interpolado:
@@ -641,7 +639,7 @@ class VisualizadorClusters:
         titulo = (f'Interpolación Espacial (KNN)\n'
                  f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}, '
                  f'n_neighbors={interpolador.n_neighbors}')
-        ax.set_title(titulo, fontweight='bold', fontsize=13)
+        ax.set_title(str(titulo), fontweight='bold', fontsize=13)
         
         # Etiquetas
         ax.set_xlabel('X (midx)', fontsize=12)
@@ -682,7 +680,7 @@ class VisualizadorClusters:
         return fig, ax
 
     def plot_comparacion_interpolacion(self, clusterer, interpolador,
-                                      guardar=True, nombre_archivo=None, mostrar=True):
+                                      guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Compara clusters originales vs interpolación lado a lado.
         
@@ -757,11 +755,11 @@ class VisualizadorClusters:
             edgecolors='k',
             linewidth=0.5
         )
-        ax.set_title('Atributo Real', fontweight='bold', fontsize=13)
+        ax.set_title(f'Atributo Real ({nombre_atributo})', fontweight='bold', fontsize=13)
         ax.set_xlabel('X (midx)')
         ax.set_ylabel('Z (midz)')
         ax.grid(alpha=0.3)
-        plt.colorbar(scatter3, ax=ax, label='starkey_min')
+        plt.colorbar(scatter3, ax=ax, label=str(nombre_atributo))
         
         plt.tight_layout()
         
@@ -783,7 +781,7 @@ class VisualizadorClusters:
         return fig, axes
     
     def plot_comparacion_n_neighbors(self, interpoladores_dict,
-                                    guardar=True, nombre_archivo=None, mostrar=True):
+                                    guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
         """
         Compara diferentes valores de n_neighbors en una grilla.
         
@@ -808,6 +806,7 @@ class VisualizadorClusters:
         for idx, (n_neigh, interp) in enumerate(sorted(interpoladores_dict.items())):
             if idx >= len(axes):
                 break
+
             
             ax = axes[idx]
             
@@ -843,7 +842,7 @@ class VisualizadorClusters:
         for idx in range(n_configs, len(axes)):
             axes[idx].axis('off')
         
-        fig.suptitle('Comparación de n_neighbors en KNN',
+        fig.suptitle(f'Comparación de n_neighbors en KNN\nAtributo: {nombre_atributo}',
                     fontsize=16, fontweight='bold', y=0.995)
         plt.tight_layout()
         
@@ -863,3 +862,133 @@ class VisualizadorClusters:
             plt.close()
         
         return fig, axes
+
+    # INSERT_YOUR_CODE
+    def plot_clusters_convexhull_with_ghost(self, clusterer, n_ghost=200, mostrar=True, guardar=False, nombre_archivo=None):
+        """
+        Muestra la gráfica 3D de los clusters, dibuja el ConvexHull y agrega puntos "ghost" equiespaciados dentro del hull.
+        Además, retorna un DataFrame combinando los originales y los "ghost"
+        
+        Parámetros:
+        -----------
+        clusterer : objeto clusterer ya ajustado
+        n_ghost : int, default=200
+            Número de puntos fantasmas (ghost) equiespaciados a generar dentro del ConvexHull
+        mostrar : bool, default=True
+            Si True, muestra la figura
+        guardar : bool, default=False
+            Si True, guarda la figura en self.carpeta_salida
+        nombre_archivo : str, default=None
+            Nombre de archivo para guardar la figura
+        """
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+        from scipy.spatial import ConvexHull, Delaunay
+
+        import numpy as np
+        import pandas as pd
+
+        # 1. Extraer los puntos originales
+        X = np.column_stack((clusterer.x_original, clusterer.y_original, clusterer.z_original))
+
+        # 2. Crear el ConvexHull y Delaunay para test de pertenencia
+        hull = ConvexHull(X)
+        delaunay = Delaunay(X[hull.vertices])
+
+        # 3. Scatter 3D de los puntos originales, coloreados por cluster
+        n_clusters = clusterer.n_clusters
+        palette = self.get_cluster_palette(n_clusters)
+        cluster_color_dict = {i: palette[i] for i in range(n_clusters)}
+        cluster_colors = np.array([cluster_color_dict[c] for c in clusterer.clusters])
+
+        fig = plt.figure(figsize=(10, 7))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(
+            clusterer.x_original, clusterer.y_original, clusterer.z_original,
+            c=cluster_colors, s=35, alpha=0.95, edgecolors='k', linewidth=0.5, label="Datos"
+        )
+
+        # 4. Graficar el ConvexHull (superficie)
+        for simplex in hull.simplices:
+            simplex = np.append(simplex, simplex[0])  # cerrar el triángulo
+            ax.plot(X[simplex, 0], X[simplex, 1], X[simplex, 2], c='tab:gray', alpha=0.6, lw=1.3, label=None)
+
+        # 5. Generar puntos ghost dentro del hull
+        # Generamos una nube 3D "dense" en el bounding box del hull
+        mins = X.min(axis=0)
+        maxs = X.max(axis=0)
+        n_grid = max(30, int(np.cbrt(n_ghost * 10)))  # más de n_ghost en malla para filtrar después
+
+        gx = np.linspace(mins[0], maxs[0], n_grid)
+        gy = np.linspace(mins[1], maxs[1], n_grid)
+        gz = np.linspace(mins[2], maxs[2], n_grid)
+        mgx, mgy, mgz = np.meshgrid(gx, gy, gz)
+        ghost_grid = np.column_stack([mgx.ravel(), mgy.ravel(), mgz.ravel()])
+
+        # Filtrar solo los que caen dentro del hull
+        in_hull_mask = delaunay.find_simplex(ghost_grid) >= 0
+        ghost_candidates = ghost_grid[in_hull_mask]
+
+        # Tomar n_ghost puntos equiespaciados del conjunto filtrado
+        if len(ghost_candidates) > n_ghost:
+            stride = max(1, int(len(ghost_candidates) / n_ghost))
+            ghost_points = ghost_candidates[::stride][:n_ghost]
+        else:
+            ghost_points = ghost_candidates
+
+        # 6. Graficar los puntos ghost
+        ax.scatter(
+            ghost_points[:,0], ghost_points[:,1], ghost_points[:,2],
+            c='aqua', s=12, alpha=0.75, marker='^', label='Ghost'
+        )
+        
+        # 7. Extras (leyenda, títulos)
+        ax.set_title("Clusters 3D + ConvexHull + Puntos Ghost", fontweight='bold', fontsize=13)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        handles = [plt.Line2D([0],[0], marker='o', color='w', label=f'Cluster {k}',
+                    markerfacecolor=cluster_color_dict[k], markeredgecolor='k', markersize=8) for k in range(n_clusters)]
+        handles.append(plt.Line2D([0],[0], color='tab:gray', lw=1.3, label='ConvexHull'))
+        handles.append(plt.Line2D([0],[0], marker='^', color='aqua', label='Ghost', markerfacecolor='aqua',
+                                    markeredgecolor='k', markersize=7, linestyle='None'))
+        ax.legend(handles=handles, fontsize=8, frameon=True, loc='best')
+
+        ax.grid(alpha=0.28)
+
+        plt.tight_layout()
+
+        if guardar:
+            if nombre_archivo is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nombre_archivo = f"convexhull_ghost_{timestamp}.png"
+            ruta = self.carpeta_salida / nombre_archivo
+            plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')
+            print(f"✅ Figura convexhull+ghost guardada en: {ruta}")
+
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+
+        # --- Generar DataFrame combinando puntos originales y ghost ---
+        # Puntos originales
+        df_original = pd.DataFrame({
+            'x': clusterer.x_original,
+            'y': clusterer.y_original,
+            'z': clusterer.z_original,
+            'atributo': clusterer.attr_original,
+            'cluster': clusterer.clusters
+        })
+        # Puntos ghost
+        n_ghost_real = ghost_points.shape[0]
+        df_ghost = pd.DataFrame({
+            'x': ghost_points[:,0],
+            'y': ghost_points[:,1],
+            'z': ghost_points[:,2],
+            'atributo': np.nan,
+            'cluster': np.nan
+        })
+
+        df_combined = pd.concat([df_original, df_ghost], ignore_index=True)
+
+        return fig, ax, ghost_points, df_combined
