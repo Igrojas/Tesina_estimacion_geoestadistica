@@ -3,7 +3,6 @@ Primera interpolación espacial.
 Con KNN
 """
 
-
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
@@ -14,11 +13,8 @@ from datetime import datetime
 class InterpoladorEspacial:
 
     def __init__(self, clusterer, n_neighbors=5, n_points=100):
-        
         if not clusterer.ajustado:
             raise ValueError("El clusterer no está ajustado")
-
-        
 
         self.clusterer = clusterer
         self.n_neighbors = n_neighbors
@@ -28,34 +24,71 @@ class InterpoladorEspacial:
         self.scaler = StandardScaler()
 
         self.xx = None
+        self.yy = None
         self.zz = None
         self.clusters_interpolados = None
         self.interpolado = False
 
     def crear_grid(self):
+        """
+        Crea puntos equiespaciados dentro del convex hull de los datos originales en 3D.
 
-        x_min = self.clusterer.x_original.min()
-        x_max = self.clusterer.x_original.max()
-        z_min = self.clusterer.z_original.min()
-        z_max = self.clusterer.z_original.max()
+        Returns
+        -------
+        x_range, y_range, z_range : np.ndarray
+            Vectores 1D para cada eje, delimitando el grid regular.
+            También guarda en self.puntos_dentro_hull el conjunto de puntos del grid que están dentro del convex hull.
+        """
+        from scipy.spatial import ConvexHull, Delaunay
 
-        margen_x = (x_max - x_min) * 0.02
-        margen_z = (z_max - z_min) * 0.02
+        # Stack de puntos originales
+        puntos = np.column_stack((
+            self.clusterer.x_original,
+            self.clusterer.y_original,
+            self.clusterer.z_original
+        ))
 
-        x_range = np.linspace(x_min - margen_x, x_max + margen_x, self.n_points)
-        z_range = np.linspace(z_min - margen_z, z_max + margen_z, self.n_points)
-    
-        return x_range, z_range
+        # Calcular bounding box minimal
+        x_min, x_max = self.clusterer.x_original.min(), self.clusterer.x_original.max()
+        y_min, y_max = self.clusterer.y_original.min(), self.clusterer.y_original.max()
+        z_min, z_max = self.clusterer.z_original.min(), self.clusterer.z_original.max()
+
+        # Definir intervalos equiespaciados
+        x_range = np.linspace(x_min, x_max, self.n_points)
+        y_range = np.linspace(y_min, y_max, self.n_points)
+        z_range = np.linspace(z_min, z_max, self.n_points)
+
+        # Crear TODOS los puntos del grid regular
+        Xg, Yg, Zg = np.meshgrid(x_range, y_range, z_range, indexing="ij")
+        puntos_grid = np.column_stack([Xg.ravel(), Yg.ravel(), Zg.ravel()])
+
+        # Calcular el convex hull y su representación "Delaunay" para queries eficientes
+        hull = ConvexHull(puntos)
+        delaunay = Delaunay(puntos[hull.vertices])
+
+        # Consultar: ¿está cada punto del grid dentro del hull? (True/False)
+        inside = delaunay.find_simplex(puntos_grid) >= 0
+        puntos_dentro = puntos_grid[inside]
+
+        # Guardar los puntos realmente dentro del hull para su uso posterior
+        self.puntos_dentro_hull = puntos_dentro
+        self.x_range = x_range
+        self.y_range = y_range
+        self.z_range = z_range
+
+        return x_range, y_range, z_range
 
     def interpolar(self):
-
         print("Interpolando... con KNN....")
 
-        x_range, z_range = self.crear_grid()
-        self.xx, self.zz = np.meshgrid(x_range, z_range)
+        x_range, y_range, z_range = self.crear_grid()
+        
+        # Fix: Set indexing="ij" for correct shape order
+        self.xx, self.yy, self.zz = np.meshgrid(x_range, y_range, z_range, indexing='ij')
 
         X_train = np.column_stack((
             self.clusterer.x_original,
+            self.clusterer.y_original,
             self.clusterer.z_original
         ))
 
@@ -65,10 +98,12 @@ class InterpoladorEspacial:
 
         X_ghost = np.column_stack((
             self.xx.flatten(),
+            self.yy.flatten(),
             self.zz.flatten()
         ))
         X_ghost_scaled = self.scaler.transform(X_ghost)
 
+        # Fix: Use self.xx.shape (should be a tuple of 3 ints), so reshape only to that
         self.clusters_interpolados = self.knn.fit(X_train_scaled, y_train).predict(X_ghost_scaled).reshape(self.xx.shape)
 
         self.interpolado = True
@@ -79,42 +114,39 @@ class InterpoladorEspacial:
     def get_dataframe(self):
         """
         Retorna un DataFrame con puntos originales y fantasmas.
-        
+
         Retorna:
         --------
         pd.DataFrame
-            DataFrame con columnas: x, z, variable, cluster, tipo
+            DataFrame con columnas: x, y, z, variable, cluster, tipo
             - tipo='original' para puntos conocidos
             - tipo='fantasma' para puntos interpolados
         """
         if not self.interpolado:
             raise ValueError("Debe ejecutar interpolar() antes de obtener el DataFrame")
         
-        # DataFrame de puntos originales
         df_originales = pd.DataFrame({
             'x': self.clusterer.x_original,
+            'y': self.clusterer.y_original,
             'z': self.clusterer.z_original,
             'variable': self.clusterer.attr_original,
             'cluster': self.clusterer.clusters,
             'tipo': 'original'
         })
         
-        # DataFrame de puntos fantasmas
         df_fantasmas = pd.DataFrame({
             'x': self.xx.flatten(),
+            'y': self.yy.flatten(),
             'z': self.zz.flatten(),
             'variable': np.nan,  # No tenemos el valor de la variable para puntos fantasmas
             'cluster': self.clusters_interpolados.flatten(),
             'tipo': 'fantasma'
         })
         
-        # Concatenar ambos DataFrames
         df_completo = pd.concat([df_originales, df_fantasmas], ignore_index=True)
-        
         return df_completo
 
     def get_info(self):
-
         if not self.interpolado:
             return {"estado": "No Interpolado"}
 
@@ -126,11 +158,12 @@ class InterpoladorEspacial:
             'n_puntos_originales': len(self.clusterer.x_original),
             'n_clusters': self.clusterer.n_clusters,
         }
+
     def print_info(self):
         """Imprime información de la interpolación"""
         info = self.get_info()
-        
-        if info.get('estado') == 'No interpolado':
+
+        if info.get('estado') == 'No Interpolado':
             print("❌ Interpolación no realizada. Ejecuta interpolar() primero.")
             return
         
@@ -146,12 +179,12 @@ class InterpoladorEspacial:
     def comparar_n_neighbors(self, lista_n_neighbors):
         """
         Compara diferentes valores de n_neighbors.
-        
+
         Parámetros:
         -----------
         lista_n_neighbors : list
             Lista de valores de n_neighbors a probar
-        
+
         Retorna:
         --------
         dict : {n_neighbors: InterpoladorEspacial}
@@ -159,9 +192,7 @@ class InterpoladorEspacial:
         print(f"🔧 Comparando {len(lista_n_neighbors)} configuraciones de n_neighbors...")
         
         resultados = {}
-        
         for n_neigh in lista_n_neighbors:
-            # Crear nuevo interpolador
             interp = InterpoladorEspacial(
                 self.clusterer,
                 n_neighbors=n_neigh,
@@ -171,7 +202,6 @@ class InterpoladorEspacial:
             resultados[n_neigh] = interp
         
         print(f"✅ Comparación completada")
-        
         return resultados
     
     def __repr__(self):

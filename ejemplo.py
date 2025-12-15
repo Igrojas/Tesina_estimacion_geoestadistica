@@ -1,52 +1,89 @@
 #%%
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import norm
-import pandas as pd
+import pyvista as pv
+from pykrige.ok3d import OrdinaryKriging3D
 
-# Cargar datos
-df = pd.read_csv('data/raw/com_p_plt_entry 1.csv', sep=',')
-attr = df["cus"]
-attr_name = "cut"
-datos = attr[attr > 0]
+# --- PASO 1: Generar Datos Sintéticos (Simulando Taladros) ---
+# En un caso real, esto vendría de tu CSV de sondajes (compositos)
+data = np.array([
+    # x, y, z, ley (ej. %Cu)
+    [10, 10, 0, 0.1],
+    [90, 10, 0, 0.2],
+    [10, 90, 0, 0.1],
+    [90, 90, 0, 0.3],
+    [50, 50, 20, 2.5], # Núcleo de alta ley
+    [50, 50, -20, 2.2],
+    [30, 30, 10, 1.5],
+    [70, 70, 10, 1.8],
+    [20, 80, -10, 0.6],
+    [80, 20, -10, 0.5],
+    [25, 25, 15, 1.7],
+    [75, 75, 15, 1.9],
+    [40, 60, 5, 0.95],
+    [65, 35, 5, 0.88],
+    [50, 80, -15, 1.0],
+    [80, 50, -15, 0.7],
+    [20, 20, 20, 0.3],
+    [80, 80, -20, 0.4],
+    [60, 40, 0, 0.9],
+    [40, 60, -5, 1.2],
+    [25, 75, 5, 0.85],
+    [75, 25, -5, 0.95],
+    [60, 60, 25, 2.8],
+    [40, 40, -25, 2.1],
+    [50, 50, 0, 2.0],    # Más puntos en el núcleo
+    [55, 55, 10, 2.4],
+    [45, 45, -10, 2.3],
+    [50, 50, 15, 2.6]
+])
 
-# Ordenar los datos
-datos_sorted = np.sort(datos)
-n = len(datos_sorted)
+# Separar coordenadas y valores (asegurar tipo float64)
+x_coords = data[:, 0].astype(np.float64)
+y_coords = data[:, 1].astype(np.float64)
+z_coords = data[:, 2].astype(np.float64)
+values = data[:, 3].astype(np.float64)
 
-# Calcular percentiles y z-scores
-percentiles = (np.arange(1, n + 1) - 0.5) / n * 100
-z_scores = norm.ppf(percentiles / 100)
+# --- PASO 2: Estimación con Kriging Ordinario 3D (PyKrige) ---
+# Definir la grilla del modelo de bloques (asegurar tipo float64)
+grid_x = np.arange(0, 100, 5, dtype=np.float64) # Bloques de 5m
+grid_y = np.arange(0, 100, 5, dtype=np.float64)
+grid_z = np.arange(-30, 30, 5, dtype=np.float64)
 
-# Crear figura con fondo blanco y grilla
-fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
-ax.set_facecolor('white')
+# Configurar Kriging
+ok3d = OrdinaryKriging3D(
+    x_coords, y_coords, z_coords, values,
+    variogram_model='exponential', # O 'spherical', 'gaussian', 'exponential'
+    verbose=False,
+    enable_plotting=False
+)
 
-# Graficar puntos
-ax.plot(datos_sorted, z_scores, 'ko', markersize=3, alpha=0.6)
+# Ejecutar estimación
+# k3d: array 3D con las estimaciones (leyes)
+# ss3d: array 3D con la varianza de kriging
+k3d, ss3d = ok3d.execute('grid', grid_x, grid_y, grid_z)
 
-# Escala logarítmica en X
-ax.set_xscale('log')
+# --- PASO 3: Visualización Profesional 3D (PyVista) ---
 
-# Configurar eje Y (probabilidad normal)
-percentile_labels = [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 40, 50, 
-                     60, 70, 80, 90, 95, 98, 99, 99.5, 99.8, 99.9, 99.95, 99.99]
-z_ticks = norm.ppf(np.array(percentile_labels) / 100)
-ax.set_yticks(z_ticks)
-ax.set_yticklabels([f'{p}' for p in percentile_labels], fontsize=9)
+# Crear una grilla estructurada en PyVista compatible con los datos
+# Nota: PyKrige devuelve datos en orden (z, y, x), a veces requiere transponer dependiendo del setup
+grid = pv.RectilinearGrid(grid_x, grid_y, grid_z)
 
-# Límites
-ax.set_ylim([norm.ppf(0.01/100), norm.ppf(99.99/100)])
+# Aplanar el array de estimación para asignarlo a la grilla (orden Fortran 'F' suele alinear mejor z,y,x)
+grid["Ley_Cu"] = k3d.flatten(order='F') 
 
-# Títulos
-ax.set_title('Gráfico de probabilidad lognormal', fontsize=14, fontweight='bold')
-ax.set_xlabel(attr_name, fontsize=11)
-ax.set_ylabel('Probs', fontsize=11)
+# Filtrar para ver solo el "mineral" (ej. ley de corte > 0.5%)
+thresholded_grid = grid.threshold(0.9)
 
-# Grid detallada como en la imagen
-ax.grid(True, which='major', linestyle='-', linewidth=0.8, alpha=0.5, color='gray')
-ax.grid(True, which='minor', linestyle='-', linewidth=0.4, alpha=0.3, color='lightgray')
+# Configurar el plotter
+plotter = pv.Plotter()
+plotter.add_mesh(thresholded_grid, cmap="jet", show_edges=True, opacity=1, label="Cuerpo Mineralizado")
+plotter.add_mesh(pv.PolyData(data[:, :3]), color="red", point_size=10, render_points_as_spheres=True, label="Sondajes")
+plotter.add_axes()
+plotter.add_legend()
+plotter.show_grid()
 
-plt.tight_layout()
-plt.show()
+print("Abriendo ventana de visualización 3D...")
+plotter.show()
+
+
 # %%

@@ -600,84 +600,201 @@ class VisualizadorClusters:
             plt.show()
         else:
             plt.close()
+        
 
         return fig
-
+        
     def plot_interpolacion(self, interpolador, mostrar_puntos=True,
-                            guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
+                           guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
+        """
+        Visualiza la interpolación KNN en 3D interactivo usando plotly,
+        mostrando los puntos nuevos creados y los originales, junto al cluster asignado.
+        Ahora también muestra cada bloque/grupo interpolado como una "nube sólida" mediante superficies 3D Mesh con color por grupo (más sólido).
+        Además, se siguen mostrando las fronteras entre clusters como superficies semitransparentes.
 
+        Nota: No muestra ni guarda la gráfica si mostrar=False o guardar=False respectivamente.
+        Así se evita doble visualización si se llama desde otros scripts o notebooks.
+        """
+        import plotly.graph_objects as go
+        import numpy as np
 
         if not interpolador.interpolado:
             raise ValueError("❌ El interpolador no está interpolado")
 
         clusterer = interpolador.clusterer
+        xx, yy, zz = interpolador.xx, interpolador.yy, interpolador.zz
+        clusters_interp = interpolador.clusters_interpolados
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        n_clusters = clusterer.n_clusters
+        from plotly.colors import sample_colorscale, find_intermediate_color
+        color_scale = "Viridis"
+        color_list = sample_colorscale(color_scale, [i/(n_clusters-1) if n_clusters > 1 else 0 for i in range(n_clusters)])
 
-        contour = ax.contourf(
-            interpolador.xx,
-            interpolador.zz,
-            interpolador.clusters_interpolados,
-            levels=np.arange(clusterer.n_clusters + 1) - 0.5,
-            cmap = self.cmap_clusters,
-            alpha = 0.4,
+        # -- Puntos originales
+        if mostrar_puntos:
+            puntos_orig = go.Scatter3d(
+                x=clusterer.x_original,
+                y=clusterer.y_original,
+                z=clusterer.z_original,
+                mode='markers',
+                marker=dict(
+                    size=5,
+                    color=clusterer.clusters,
+                    colorscale=color_scale,
+                    opacity=0.92,
+                    line=dict(width=1, color='black')
+                ),
+                name="Puntos originales",
+                text=[f"Cluster: {c}" for c in clusterer.clusters],
+                hoverinfo='text'
+            )
+        else:
+            puntos_orig = None
+
+        # -- Puntos de la grilla interpolados (todos los puntos creados)
+        x_interp = xx.flatten()
+        y_interp = yy.flatten()
+        z_interp = zz.flatten()
+        clusters_interp_flat = clusters_interp.flatten()
+
+        puntos_interpolados = go.Scatter3d(
+            x=x_interp,
+            y=y_interp,
+            z=z_interp,
+            mode='markers',
+            marker=dict(
+                size=3,
+                color=clusters_interp_flat,
+                colorscale=color_scale,
+                opacity=0.18,  # aún más bajo, para que no opaque las Mesh (bloques sólidos)
+                line=dict(width=0.3, color='gray')
+            ),
+            name="Puntos interpolados",
+            text=[f"Cluster: {c}" for c in clusters_interp_flat],
+            hoverinfo='skip'
         )
 
-        if mostrar_puntos:
-            scatter = ax.scatter(
-                clusterer.x_original,
-                clusterer.z_original,
-                c=clusterer.clusters,
-                cmap=self.cmap_clusters,
-                s=50,
-                alpha=0.9,
-                edgecolors='k',
-                linewidth=0.8,
-                zorder=10
-            )
+        # ---------- Mesh3D: bloques sólidos para cada grupo/clúster -------------
+        # Usamos marching_cubes para cada cluster para obtener el "volumen" (malla) de cada grupo y seccionarlo como sólido.
+        meshes_clusters = []
+        try:
+            from skimage.measure import marching_cubes
+            for k in range(n_clusters):
+                mask = (clusters_interp == k).astype(float)
+                if np.sum(mask) > 8:
+                    # Obtenemos la malla 3D del bloque cluster k
+                    verts, faces, normals, values = marching_cubes(mask, level=0.5)
+                    # Convertir a coordenadas reales
+                    scale_x = (xx.max() - xx.min()) / (xx.shape[0] - 1) if xx.shape[0] > 1 else 1
+                    scale_y = (yy.max() - yy.min()) / (yy.shape[1] - 1) if yy.shape[1] > 1 else 1
+                    scale_z = (zz.max() - zz.min()) / (zz.shape[2] - 1) if zz.shape[2] > 1 else 1
+                    verts_real = np.zeros_like(verts)
+                    verts_real[:, 0] = verts[:, 0] * scale_x + xx.min()
+                    verts_real[:, 1] = verts[:, 1] * scale_y + yy.min()
+                    verts_real[:, 2] = verts[:, 2] * scale_z + zz.min()
+                    surface_color = color_list[k] if isinstance(color_list[k], str) else f'rgb{color_list[k][:3]}'
+                    # Aumentamos la opacidad para que se vea más sólido, pero no completamente opaco
+                    mesh = go.Mesh3d(
+                        x=verts_real[:, 0],
+                        y=verts_real[:, 1],
+                        z=verts_real[:, 2],
+                        i=faces[:, 0],
+                        j=faces[:, 1],
+                        k=faces[:, 2],
+                        name=f"Grupo Interpolado {k}",
+                        color=surface_color,
+                        opacity=0.9,  # Más sólido, sin ser completamente opaco
+                        showscale=False,
+                        hoverinfo="skip"
+                    )
+                    meshes_clusters.append(mesh)
+        except ImportError:
+            print("⚠️ skimage no está instalado. No se mostrarán bloques sólidos.")
+        except Exception as e:
+            print(f"⚠️ Error generando bloques sólidos de clusters: {e}")
 
-        titulo = (f'Interpolación Espacial (KNN)\n'
-                 f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}, '
-                 f'n_neighbors={interpolador.n_neighbors}')
-        ax.set_title(str(titulo), fontweight='bold', fontsize=13)
-        
-        # Etiquetas
-        ax.set_xlabel('X (midx)', fontsize=12)
-        ax.set_ylabel('Z (midz)', fontsize=12)
-        ax.grid(alpha=0.3)
-        
-        # Colorbar
-        cbar = plt.colorbar(contour, ax=ax)
-        cbar.set_label('Cluster', fontsize=11)
-        
-        # Información
-        info = interpolador.get_info()
-        texto = (f"Grilla: {info['n_points']}×{info['n_points']}\n"
-                f"KNN neighbors: {info['n_neighbors']}")
-        ax.text(0.02, 0.98, texto,
-               transform=ax.transAxes,
-               verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8),
-               fontsize=9)
-        
-        plt.tight_layout()
-        
-        # Guardar
+        # ---------- Fronteras / delimitaciones entre clusters (como antes, solo para contorno visual) -------------
+        superficies_delimitacion = []
+        try:
+            from skimage.measure import marching_cubes
+            for k in range(n_clusters - 1):
+                mask = (clusters_interp == k).astype(float)
+                if np.sum(mask) > 8:
+                    verts, faces, normals, values = marching_cubes(mask, level=0.5)
+                    scale_x = (xx.max() - xx.min()) / (xx.shape[0] - 1) if xx.shape[0] > 1 else 1
+                    scale_y = (yy.max() - yy.min()) / (yy.shape[1] - 1) if yy.shape[1] > 1 else 1
+                    scale_z = (zz.max() - zz.min()) / (zz.shape[2] - 1) if zz.shape[2] > 1 else 1
+                    verts_real = np.zeros_like(verts)
+                    verts_real[:, 0] = verts[:, 0] * scale_x + xx.min()
+                    verts_real[:, 1] = verts[:, 1] * scale_y + yy.min()
+                    verts_real[:, 2] = verts[:, 2] * scale_z + zz.min()
+                    # El color de frontera: más oscuro (o negro) y más transparente
+                    superficie = go.Mesh3d(
+                        x=verts_real[:, 0],
+                        y=verts_real[:, 1],
+                        z=verts_real[:, 2],
+                        i=faces[:, 0],
+                        j=faces[:, 1],
+                        k=faces[:, 2],
+                        name=f"Delimitación cluster {k}",
+                        opacity=0.12,
+                        color='black',
+                        showscale=False,
+                        hoverinfo='skip'
+                    )
+                    superficies_delimitacion.append(superficie)
+        except ImportError:
+            print("⚠️ skimage no está instalado. No se mostrarán superficies de delimitación.")
+        except Exception as e:
+            print(f"⚠️ Error generando delimitaciones: {e}")
+
+        # Figura
+        data = []
+        if mostrar_puntos and puntos_orig is not None:
+            data.append(puntos_orig)
+        # Primero los bloque sólidos (Mesh3d por cluster), luego los puntos interplados, luego las fronteras
+        data.extend(meshes_clusters)
+        data.append(puntos_interpolados)
+        data.extend(superficies_delimitacion)
+
+        titulo = (f'Interpolación Espacial (KNN, 3D) plotly<br>'
+                  f'k={clusterer.n_clusters}, peso={clusterer.w_spatial:.2f}, '
+                  f'n_neighbors={interpolador.n_neighbors}<br>'
+                  f'<span style="font-size:13px">(Los bloques sólidos son cada grupo/cluster. Bordes delimitan clusters)</span>')
+
+        layout = go.Layout(
+            title=titulo,
+            scene=dict(
+                xaxis_title='X (midx)',
+                yaxis_title='Y (midy)',
+                zaxis_title='Z (midz)'
+            ),
+            margin=dict(r=10, l=10, b=10, t=60),
+            legend=dict(
+                x=0.05, y=0.98,
+                bgcolor='rgba(255,255,255,0.7)',
+                font_size=11
+            )
+        )
+
+        fig = go.Figure(data=data, layout=layout)
+
+        # Solo guarda si se solicita
         if guardar:
             if nombre_archivo is None:
+                from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                nombre_archivo = f"interpolacion_k{clusterer.n_clusters}_knn{interpolador.n_neighbors}_{timestamp}.png"
-            
+                nombre_archivo = f"interpolacion3d_plotly_k{clusterer.n_clusters}_knn{interpolador.n_neighbors}_{timestamp}.html"
             ruta = self.carpeta_salida / nombre_archivo
-            plt.savefig(ruta, dpi=self.dpi, bbox_inches='tight')
-            print(f"✅ Interpolación guardada: {ruta}")
-        
+            fig.write_html(str(ruta))
+            print(f"✅ Interpolación 3D interactiva guardada: {ruta}")
+
+        # Solo muestra si se solicita (y no mostrar por default si mostrar=False).
         if mostrar:
-            plt.show()
-        else:
-            plt.close()
-        
-        return fig, ax
+            fig.show()
+
+        # Si mostrar=False y guardar=False, solo retorna el objeto plotly.Figure sin mostrar ni guardar
+        return fig
 
     def plot_comparacion_interpolacion(self, clusterer, interpolador,
                                       guardar=True, nombre_archivo=None, mostrar=True, nombre_atributo="starkey_min"):
