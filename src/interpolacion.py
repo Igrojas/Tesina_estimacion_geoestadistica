@@ -31,7 +31,8 @@ class InterpoladorEspacial:
 
     def crear_grid(self):
         """
-        Crea puntos equiespaciados dentro del convex hull de los datos originales en 3D.
+        Crea un grid regular de 25x25x25 puntos dentro del bounding box de los datos originales,
+        y determina cuáles de esos puntos caen dentro del convex hull de los puntos originales.
 
         Returns
         -------
@@ -53,10 +54,11 @@ class InterpoladorEspacial:
         y_min, y_max = self.clusterer.y_original.min(), self.clusterer.y_original.max()
         z_min, z_max = self.clusterer.z_original.min(), self.clusterer.z_original.max()
 
-        # Definir intervalos equiespaciados
-        x_range = np.linspace(x_min, x_max, self.n_points)
-        y_range = np.linspace(y_min, y_max, self.n_points)
-        z_range = np.linspace(z_min, z_max, self.n_points)
+        # Definir SIEMPRE un grid de 25x25x25
+        grid_points = 25
+        x_range = np.linspace(x_min, x_max, grid_points)
+        y_range = np.linspace(y_min, y_max, grid_points)
+        z_range = np.linspace(z_min, z_max, grid_points)
 
         # Crear TODOS los puntos del grid regular
         Xg, Yg, Zg = np.meshgrid(x_range, y_range, z_range, indexing="ij")

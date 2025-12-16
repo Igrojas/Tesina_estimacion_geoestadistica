@@ -1,89 +1,170 @@
 #%%
+import pandas as pd
 import numpy as np
-import pyvista as pv
-from pykrige.ok3d import OrdinaryKriging3D
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.metrics import r2_score, mean_squared_error
+import warnings
 
-# --- PASO 1: Generar Datos Sintéticos (Simulando Taladros) ---
-# En un caso real, esto vendría de tu CSV de sondajes (compositos)
-data = np.array([
-    # x, y, z, ley (ej. %Cu)
-    [10, 10, 0, 0.1],
-    [90, 10, 0, 0.2],
-    [10, 90, 0, 0.1],
-    [90, 90, 0, 0.3],
-    [50, 50, 20, 2.5], # Núcleo de alta ley
-    [50, 50, -20, 2.2],
-    [30, 30, 10, 1.5],
-    [70, 70, 10, 1.8],
-    [20, 80, -10, 0.6],
-    [80, 20, -10, 0.5],
-    [25, 25, 15, 1.7],
-    [75, 75, 15, 1.9],
-    [40, 60, 5, 0.95],
-    [65, 35, 5, 0.88],
-    [50, 80, -15, 1.0],
-    [80, 50, -15, 0.7],
-    [20, 20, 20, 0.3],
-    [80, 80, -20, 0.4],
-    [60, 40, 0, 0.9],
-    [40, 60, -5, 1.2],
-    [25, 75, 5, 0.85],
-    [75, 25, -5, 0.95],
-    [60, 60, 25, 2.8],
-    [40, 40, -25, 2.1],
-    [50, 50, 0, 2.0],    # Más puntos en el núcleo
-    [55, 55, 10, 2.4],
-    [45, 45, -10, 2.3],
-    [50, 50, 15, 2.6]
-])
+warnings.filterwarnings('ignore')
 
-# Separar coordenadas y valores (asegurar tipo float64)
-x_coords = data[:, 0].astype(np.float64)
-y_coords = data[:, 1].astype(np.float64)
-z_coords = data[:, 2].astype(np.float64)
-values = data[:, 3].astype(np.float64)
+def cargar_datos(path, columnas, frac_muestreo=0.05, filtro_midy=7.4e6, random_state=0):
+    df = pd.read_csv(path, sep=",")
+    df = df[columnas].copy()
+    df = df.sample(frac=frac_muestreo, random_state=random_state).reset_index(drop=True)
+    df = df[df['midy'] > filtro_midy].reset_index(drop=True)
+    mask = (df['cus'] > 0) & np.isfinite(df[['midx', 'midy', 'midz', 'cus']]).all(axis=1)
+    df = df[mask].reset_index(drop=True)
+    return df
 
-# --- PASO 2: Estimación con Kriging Ordinario 3D (PyKrige) ---
-# Definir la grilla del modelo de bloques (asegurar tipo float64)
-grid_x = np.arange(0, 100, 5, dtype=np.float64) # Bloques de 5m
-grid_y = np.arange(0, 100, 5, dtype=np.float64)
-grid_z = np.arange(-30, 30, 5, dtype=np.float64)
+def preparar_variables(df):
+    x = df['midx'].values
+    y = df['midy'].values
+    z = df['midz'].values
+    atributo = np.log(df['cus'].values)
+    return x, y, z, atributo
 
-# Configurar Kriging
-ok3d = OrdinaryKriging3D(
-    x_coords, y_coords, z_coords, values,
-    variogram_model='exponential', # O 'spherical', 'gaussian', 'exponential'
-    verbose=False,
-    enable_plotting=False
-)
+def escalar_variables(x, y, z, atributo):
+    scaler_coord = StandardScaler()
+    coords = np.column_stack((x, y, z))
+    coords_scaled = scaler_coord.fit_transform(coords)
+    scaler_attr = StandardScaler()
+    atributo_scaled = scaler_attr.fit_transform(atributo.reshape(-1, 1)).flatten()
+    return coords_scaled, atributo_scaled, scaler_coord, scaler_attr
 
-# Ejecutar estimación
-# k3d: array 3D con las estimaciones (leyes)
-# ss3d: array 3D con la varianza de kriging
-k3d, ss3d = ok3d.execute('grid', grid_x, grid_y, grid_z)
+def dividir_train_test(coords_scaled, atributo_scaled, test_size=0.3):
+    X_train, X_test, y_train, y_test = train_test_split(
+        coords_scaled, atributo_scaled, test_size=test_size
+    )
+    return X_train, X_test, y_train, y_test
 
-# --- PASO 3: Visualización Profesional 3D (PyVista) ---
+def entrenar_knn(X_train, y_train, n_neighbors=30):
+    knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance", p=2)
+    knn.fit(X_train, y_train)
+    return knn
 
-# Crear una grilla estructurada en PyVista compatible con los datos
-# Nota: PyKrige devuelve datos en orden (z, y, x), a veces requiere transponer dependiendo del setup
-grid = pv.RectilinearGrid(grid_x, grid_y, grid_z)
+def evaluar_modelo(knn, X_test, y_test, scaler_attr):
+    y_pred_scaled = knn.predict(X_test)
+    y_pred = scaler_attr.inverse_transform(y_pred_scaled.reshape(-1,1)).flatten()
+    y_true = scaler_attr.inverse_transform(y_test.reshape(-1,1)).flatten()
+    r2 = r2_score(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    print(f"\nValidación 80/20 - R2: {r2:.3f}, RMSE: {rmse:.3f}")
+    return y_true, y_pred, r2, rmse
 
-# Aplanar el array de estimación para asignarlo a la grilla (orden Fortran 'F' suele alinear mejor z,y,x)
-grid["Ley_Cu"] = k3d.flatten(order='F') 
+def crear_malla(coords_scaled, scaler_coord, grid_size=100):
+    min_vals = coords_scaled[:, :2].min(axis=0)
+    max_vals = coords_scaled[:, :2].max(axis=0)
+    gridx = np.linspace(min_vals[0], max_vals[0], grid_size)
+    gridy = np.linspace(min_vals[1], max_vals[1], grid_size)
+    grid_x, grid_y = np.meshgrid(gridx, gridy)
+    grid_z = np.zeros_like(grid_x) # El midz (z) para la malla; podrías interpolar o tomar un valor medio si quisieras
+    grid_points_scaled = np.column_stack((grid_x.flatten(), grid_y.flatten(), grid_z.flatten()))
+    grid_orig = scaler_coord.inverse_transform(grid_points_scaled)
+    gridx_orig = grid_orig[:,0].reshape(grid_x.shape)
+    gridy_orig = grid_orig[:,1].reshape(grid_y.shape)
+    gridz_orig = grid_orig[:,2].reshape(grid_z.shape)
+    return grid_x, grid_y, grid_z, grid_points_scaled, gridx_orig, gridy_orig, gridz_orig
 
-# Filtrar para ver solo el "mineral" (ej. ley de corte > 0.5%)
-thresholded_grid = grid.threshold(0.9)
+def estimar_en_malla(knn, grid_points_scaled, scaler_attr, grid_shape):
+    z_knn_scaled = knn.predict(grid_points_scaled).reshape(grid_shape)
+    z_knn = scaler_attr.inverse_transform(z_knn_scaled.reshape(-1, 1)).reshape(grid_shape)
+    return z_knn
 
-# Configurar el plotter
-plotter = pv.Plotter()
-plotter.add_mesh(thresholded_grid, cmap="jet", show_edges=True, opacity=1, label="Cuerpo Mineralizado")
-plotter.add_mesh(pv.PolyData(data[:, :3]), color="red", point_size=10, render_points_as_spheres=True, label="Sondajes")
-plotter.add_axes()
-plotter.add_legend()
-plotter.show_grid()
+def graficar_resultados(x, y, z, atributo, gridx_orig, gridy_orig, z_knn, titulo_malla="Estimación KNN (escala original)"):
+    cmap = "turbo"
+    fig, axs = plt.subplots(1, 2, figsize=(16, 6))
 
-print("Abriendo ventana de visualización 3D...")
-plotter.show()
+    # 1. Datos originales
+    scatter0 = axs[0].scatter(x, y, c=atributo, cmap=cmap)
+    axs[0].grid(True, linestyle='--', linewidth=0.5, alpha=0.2)
+    axs[0].set_title('Datos Sondajes (log cus)', fontsize=13)
+    axs[0].set_xlabel('midx', fontsize=11)
+    axs[0].set_ylabel('midy', fontsize=11)
+    axs[0].tick_params(axis='both', labelsize=10)
+    cbar0 = plt.colorbar(scatter0, ax=axs[0], orientation='vertical')
+    cbar0.set_label('log(cus)', fontsize=11)
 
+    # 2. Estimación KNN en grilla
+    img = axs[1].imshow(
+        z_knn, origin='lower',
+        extent=(gridx_orig.min(), gridx_orig.max(), gridy_orig.min(), gridy_orig.max()),
+        aspect='auto', cmap=cmap
+    )
+    axs[1].scatter(x, y, c='k', s=5, alpha=0.25, label='Datos')
+    axs[1].set_title(titulo_malla, fontsize=13)
+    axs[1].set_xlabel('midx', fontsize=11)
+    axs[1].set_ylabel('midy', fontsize=11)
+    axs[1].tick_params(axis='both', labelsize=10)
+    cbar1 = plt.colorbar(img, ax=axs[1], orientation='vertical')
+    cbar1.set_label('log(cus) estimado', fontsize=11)
 
-# %%
+    plt.tight_layout()
+    plt.show()
+
+def main(ruta, columnas, frac_muestreo=0.05, n_neighbors=30, grid_size=100):
+    # 1. Cargar y preparar datos
+    df = cargar_datos(ruta, columnas, frac_muestreo=frac_muestreo)
+    x, y, z, atributo = preparar_variables(df)
+    print(f"📊 Datos cargados: {len(df)} puntos")
+    print(f"Estadísticas de log(cus): min={atributo.min():.3f}, max={atributo.max():.3f}, mean={atributo.mean():.3f}")
+    # 2. Escalar
+    coords_scaled, atributo_scaled, scaler_coord, scaler_attr = escalar_variables(x, y, z, atributo)
+    # 3. Split train/test
+    X_train, X_test, y_train, y_test = dividir_train_test(coords_scaled, atributo_scaled)
+    # 4. Entrenar KNN
+    knn = entrenar_knn(X_train, y_train, n_neighbors=n_neighbors)
+    # 5. Validar modelo sobre test
+    y_true, y_pred, r2, rmse = evaluar_modelo(knn, X_test, y_test, scaler_attr)
+    # 6. Crear malla y estimar en la grilla
+    grid_x, grid_y, grid_z, grid_points_scaled, gridx_orig, gridy_orig, gridz_orig = crear_malla(coords_scaled, scaler_coord, grid_size=grid_size)
+    z_knn = estimar_en_malla(knn, grid_points_scaled, scaler_attr, grid_x.shape)
+    # 7. Graficar resultados
+    graficar_resultados(x, y, z, atributo, gridx_orig, gridy_orig, z_knn)
+
+    # 8. Adicional: comparar histograma de datos reales (de entrenamiento) vs. estimaciones en la malla completa
+    import seaborn as sns
+    fig, axes = plt.subplots(1,2, figsize=(12,5))
+    
+    # Scatter pred vs real TEST
+    axes[0].scatter(y_true, y_pred, alpha=0.5)
+    axes[0].set_xlabel('log(cus) Test Real')
+    axes[0].set_ylabel('log(cus) Test Estimado')
+    axes[0].set_title('KNN: Predicción vs Real (Test)')
+    min_plot = min(np.min(y_true), np.min(y_pred))
+    max_plot = max(np.max(y_true), np.max(y_pred))
+    axes[0].plot([min_plot, max_plot], [min_plot, max_plot], 'k--')
+    axes[0].grid(alpha=0.2)
+    
+    # Histogramas: comparar todos los datos de entrenamiento vs estimado en toda la malla
+    # Real: use la variable "atributo" (todos los datos log(cus) originales)
+    # Estimado: puntos de la grilla ("z_knn" aplanado)
+    bins = np.linspace(
+        min(np.min(atributo), np.min(z_knn)),
+        max(np.max(atributo), np.max(z_knn)),
+        30
+    )
+    n_real, _, _ = axes[1].hist(atributo, bins=bins, alpha=0.7, label='Entrenamiento (Real)', color='royalblue', edgecolor='black')
+    n_estimado, _, _ = axes[1].hist(z_knn.flatten(), bins=bins, alpha=0.7, label='Malla (Estimado)', color='tomato', edgecolor='black')
+    axes[1].set_xlabel('log(cus)')
+    axes[1].set_ylabel('Frecuencia')
+    axes[1].set_title(
+        f'Histograma: Entrenamiento vs Malla\n'
+        f'Total Real: {len(atributo)}, Total Estimado: {z_knn.size}'
+    )
+    axes[1].legend()
+    axes[1].grid(alpha=0.2)
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    # Opcional: Cambia frac_muestreo a voluntad
+    main(
+        ruta='data/raw/com_p_plt_entry 1.csv',
+        columnas=['midx', 'midy', 'midz', 'cus'],
+        frac_muestreo=0.15,    # Fracción de datos a muestrear
+        n_neighbors=5,        # Número de vecinos para KNN
+        grid_size=100,         # Tamaño de grilla para el mapa de estimación
+    )

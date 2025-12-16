@@ -663,11 +663,11 @@ class VisualizadorClusters:
             z=z_interp,
             mode='markers',
             marker=dict(
-                size=3,
+                size=10,
                 color=clusters_interp_flat,
                 colorscale=color_scale,
-                opacity=0.18,  # aún más bajo, para que no opaque las Mesh (bloques sólidos)
-                line=dict(width=0.3, color='gray')
+                opacity=0.7,  # aún más bajo, para que no opaque las Mesh (bloques sólidos)
+                line=dict(width=0.1)
             ),
             name="Puntos interpolados",
             text=[f"Cluster: {c}" for c in clusters_interp_flat],
